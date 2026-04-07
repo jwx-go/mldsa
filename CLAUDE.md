@@ -2,53 +2,60 @@
 
 ## Overview
 
-This module (`github.com/jwx-go/mldsa`) provides ML-DSA (Module-Lattice-Based Digital Signature Algorithm, FIPS 204) support for `github.com/lestrrat-go/jwx/v4`.
+This module (`github.com/jwx-go/mldsa`) provides ML-DSA (Module-Lattice-Based Digital Signature Algorithm, FIPS 204) support for `github.com/lestrrat-go/jwx`.
 
 ML-DSA is a post-quantum digital signature scheme. This module bridges the `filippo.io/mldsa` implementation into jwx's algorithm registration system, enabling ML-DSA key types and signing/verification in JWK, JWS, and JWT workflows.
 
 ## Architecture
 
-This module follows the same external extension pattern as `ext/es256k` in jwx:
+This module implements a custom `jwk.Key` type (`AKP`) and registers ML-DSA algorithms via jwx's extension point system. It bypasses `jwsbb`/`dsig` entirely, using custom `jws.Signer`/`jws.Verifier` implementations that call `filippo.io/mldsa` directly.
 
-- Registers ML-DSA signature algorithms with `jwa`
-- Registers ML-DSA key type with `jwa`
-- Provides `jwk.Key` import/export for ML-DSA raw keys
-- Implements `jws.Signer` and `jws.Verifier` for ML-DSA algorithms
-- Maps ML-DSA algorithms to `dsig` algorithm identifiers
+### JWK Key Type: AKP (Algorithm Key Pair)
 
-### Integration Points with JWX
+Follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-dilithium/draft-ietf-cose-dilithium.html):
+
+- `kty`: `"AKP"` (read-only)
+- `alg`: `"ML-DSA-44"` / `"ML-DSA-65"` / `"ML-DSA-87"` (REQUIRED)
+- `pub`: base64url-encoded public key bytes (REQUIRED)
+- `priv`: base64url-encoded 32-byte seed (private keys only)
+- Thumbprint fields: `alg`, `kty`, `pub` in lexicographic order
+
+### Registration Points
 
 | JWX Package | Registration Function | Purpose |
 |-------------|----------------------|---------|
+| `jwa` | `RegisterKeyType()` | Register AKP key type |
 | `jwa` | `RegisterSignatureAlgorithm()` | Register ML-DSA-44, ML-DSA-65, ML-DSA-87 |
-| `jwa` | `RegisterKeyType()` | Register ML-DSA key type |
-| `jwk` | `RegisterKeyParser()` | Parse ML-DSA JWK JSON |
-| `jwk` | `RegisterKeyImporter()` | Convert raw ML-DSA keys to `jwk.Key` |
+| `jwk` | `RegisterKeyParser()` | Parse AKP JWK JSON |
+| `jwk` | `RegisterProbeField()` | Register `priv` probe for pub/priv distinction |
+| `jwk` | `RegisterKeyImporter()` | Convert `*mldsa.PrivateKey`/`*mldsa.PublicKey` to `jwk.Key` |
 | `jwk` | `RegisterKeyExporter()` | Convert `jwk.Key` to raw ML-DSA keys |
-| `jws` | `RegisterSigner()` | ML-DSA signing |
-| `jws` | `RegisterVerifier()` | ML-DSA verification |
-| `jws` | `RegisterAlgorithmForKeyType()` | Associate algorithms with key type |
+| `jws` | `RegisterSigner()` | ML-DSA signing (3 algorithms) |
+| `jws` | `RegisterVerifier()` | ML-DSA verification (3 algorithms) |
+| `jws` | `RegisterAlgorithmForKeyType()` | Associate algorithms with AKP key type |
+
+### Key Implementation Note
+
+The `akpPublicKey` and `akpPrivateKey` types implement the full `jwk.Key` interface from scratch (including all standard JWK header fields). This is necessary because jwx does not provide an embeddable base key type for external modules. This boilerplate could be refactored if jwx adds such a type.
 
 ### Dependency on filippo.io/mldsa
 
 This module currently depends on `filippo.io/mldsa` for the underlying ML-DSA implementation. Once Go ships `crypto/mldsa` (tracking: https://github.com/golang/go/issues/77626), this module will migrate to the standard library implementation and this separate module may become unnecessary — the support could move directly into jwx.
 
-## Algorithms
-
-| Algorithm | FIPS 204 Parameter Set | Security Level |
-|-----------|----------------------|----------------|
-| ML-DSA-44 | ML-DSA-44 | NIST Level 2 (roughly equivalent to AES-128) |
-| ML-DSA-65 | ML-DSA-65 | NIST Level 3 (roughly equivalent to AES-192) |
-| ML-DSA-87 | ML-DSA-87 | NIST Level 5 (roughly equivalent to AES-256) |
-
 ## Build / Test
 
-```
-go test ./...
-```
-
-## Module Path
+Requires `GOEXPERIMENT=jsonv2` (jwx v4 dependency):
 
 ```
-github.com/jwx-go/mldsa
+GOEXPERIMENT=jsonv2 go test ./...
 ```
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `mldsa.go` | Package doc, algorithm constants, `init()` registration, key parser/importer/exporter |
+| `key.go` | `akpPublicKey` and `akpPrivateKey` implementing `jwk.Key` |
+| `signer.go` | `mldsaSigner` implementing `jws.Signer` |
+| `verifier.go` | `mldsaVerifier` implementing `jws.Verifier` |
+| `mldsa_test.go` | Tests |

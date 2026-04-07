@@ -2,7 +2,7 @@
 
 ML-DSA (FIPS 204) extension for [github.com/lestrrat-go/jwx](https://github.com/lestrrat-go/jwx).
 
-This module adds post-quantum ML-DSA digital signature support to jwx, enabling ML-DSA-44, ML-DSA-65, and ML-DSA-87 algorithms for use in JWK, JWS, and JWT operations.
+This module adds post-quantum ML-DSA digital signature support to jwx, enabling ML-DSA-44, ML-DSA-65, and ML-DSA-87 algorithms for use in JWK, JWS, and JWT operations. JWK representation follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-dilithium/draft-ietf-cose-dilithium.html) using the `AKP` (Algorithm Key Pair) key type.
 
 ## Status
 
@@ -24,10 +24,43 @@ import _ "github.com/jwx-go/mldsa"
 
 This registers:
 
-- **Key type**: ML-DSA
+- **Key type**: AKP (Algorithm Key Pair)
 - **Signature algorithms**: ML-DSA-44, ML-DSA-65, ML-DSA-87
 - **JWK import/export** for ML-DSA public and private keys
 - **JWS signing/verification** using ML-DSA
+
+### Sign and verify with raw keys
+
+```go
+import (
+    "filippo.io/mldsa"
+    jwxmldsa "github.com/jwx-go/mldsa"
+    "github.com/lestrrat-go/jwx/v3/jws"
+)
+
+sk, _ := mldsa.GenerateKey(mldsa.MLDSA65())
+signed, _ := jws.Sign(payload, jws.WithKey(jwxmldsa.MLDSA65(), sk))
+verified, _ := jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), sk.PublicKey()))
+```
+
+### Sign and verify with JWK keys
+
+```go
+import (
+    "filippo.io/mldsa"
+    jwxmldsa "github.com/jwx-go/mldsa"
+    "github.com/lestrrat-go/jwx/v3/jwk"
+    "github.com/lestrrat-go/jwx/v3/jws"
+)
+
+sk, _ := mldsa.GenerateKey(mldsa.MLDSA65())
+jwkKey, _ := jwk.Import[jwk.Key](sk)
+
+signed, _ := jws.Sign(payload, jws.WithKey(jwxmldsa.MLDSA65(), jwkKey))
+
+pubJWK, _ := jwkKey.PublicKey()
+verified, _ := jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), pubJWK))
+```
 
 ## Algorithms
 

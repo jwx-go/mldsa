@@ -1,8 +1,16 @@
 // Package mldsa provides ML-DSA (FIPS 204) support for the jwx library.
 //
 // ML-DSA is a post-quantum digital signature scheme. This module bridges
-// filippo.io/mldsa into jwx's algorithm registration system, enabling
+// [filippo.io/mldsa] into jwx's algorithm registration system, enabling
 // ML-DSA key types and signing/verification in JWK, JWS, and JWT workflows.
+//
+// This exists as a separate module because Go's standard library does not
+// yet include ML-DSA support, requiring the external [filippo.io/mldsa]
+// dependency. To avoid imposing this dependency on all jwx users, ML-DSA
+// support is provided as an opt-in extension. Once Go ships [crypto/mldsa]
+// (see https://github.com/golang/go/issues/77626), this module will migrate
+// to the standard library implementation and ML-DSA support may move directly
+// into jwx, at which point this module will be deprecated.
 //
 // Import this package for its side effects to enable ML-DSA support:
 //

@@ -4,8 +4,9 @@ import (
 	"fmt"
 
 	"filippo.io/mldsa"
-	"github.com/lestrrat-go/jwx/v3/jwk"
-	"github.com/lestrrat-go/jwx/v3/jws/jwsbb"
+	"github.com/lestrrat-go/jwx/v4/jwa"
+	"github.com/lestrrat-go/jwx/v4/jwk"
+	"github.com/lestrrat-go/jwx/v4/jws/jwsbb"
 )
 
 type mldsaVerifier struct {
@@ -28,11 +29,11 @@ func extractPublicKey(key any, params *mldsa.Parameters) (*mldsa.PublicKey, erro
 	case *mldsa.PrivateKey:
 		return k.PublicKey(), nil
 	case jwk.Key:
-		if k.KeyType() != AKP() {
+		if k.KeyType() != jwa.AKP() {
 			return nil, fmt.Errorf(`expected AKP key type, got %s`, k.KeyType())
 		}
 
-		pubV, ok := k.Field(AKPPubKey)
+		pubV, ok := k.Field(jwk.AKPPubKey)
 		if !ok {
 			return nil, fmt.Errorf(`key does not contain "pub" field`)
 		}

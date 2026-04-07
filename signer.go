@@ -4,8 +4,9 @@ import (
 	"fmt"
 
 	"filippo.io/mldsa"
-	"github.com/lestrrat-go/jwx/v3/jwk"
-	"github.com/lestrrat-go/jwx/v3/jws/jwsbb"
+	"github.com/lestrrat-go/jwx/v4/jwa"
+	"github.com/lestrrat-go/jwx/v4/jwk"
+	"github.com/lestrrat-go/jwx/v4/jws/jwsbb"
 )
 
 type mldsaSigner struct {
@@ -26,11 +27,11 @@ func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, er
 	case *mldsa.PrivateKey:
 		return k, nil
 	case jwk.Key:
-		if k.KeyType() != AKP() {
+		if k.KeyType() != jwa.AKP() {
 			return nil, fmt.Errorf(`expected AKP key type, got %s`, k.KeyType())
 		}
 
-		privV, ok := k.Field(AKPPrivKey)
+		privV, ok := k.Field(jwk.AKPPrivKey)
 		if !ok {
 			return nil, fmt.Errorf(`key does not contain "priv" field`)
 		}

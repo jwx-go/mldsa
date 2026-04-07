@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"filippo.io/mldsa"
-	"github.com/lestrrat-go/jwx/v3/jwa"
-	"github.com/lestrrat-go/jwx/v3/jwk"
-	"github.com/lestrrat-go/jwx/v3/jws"
+	"github.com/lestrrat-go/jwx/v4/jwa"
+	"github.com/lestrrat-go/jwx/v4/jwk"
+	"github.com/lestrrat-go/jwx/v4/jws"
 	"github.com/stretchr/testify/require"
 
 	jwxmldsa "github.com/jwx-go/mldsa"
@@ -19,7 +19,7 @@ func TestAlgorithmConstants(t *testing.T) {
 
 	t.Run("key type", func(t *testing.T) {
 		t.Parallel()
-		require.Equal(t, "AKP", jwxmldsa.AKP().String())
+		require.Equal(t, "AKP", jwa.AKP().String())
 	})
 
 	t.Run("signature algorithms", func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSignVerifyJWK(t *testing.T) {
 			// Import to JWK
 			privJWK, err := jwk.Import[jwk.Key](sk)
 			require.NoError(t, err)
-			require.Equal(t, jwxmldsa.AKP(), privJWK.KeyType())
+			require.Equal(t, jwa.AKP(), privJWK.KeyType())
 
 			// Sign with JWK private key
 			signed, err := jws.Sign(payload, jws.WithKey(tc.alg, privJWK))
@@ -146,7 +146,7 @@ func TestJWKParseSerialization(t *testing.T) {
 	// Parse back
 	parsed, err := jwk.ParseKey[jwk.Key](serialized)
 	require.NoError(t, err)
-	require.Equal(t, jwxmldsa.AKP(), parsed.KeyType())
+	require.Equal(t, jwa.AKP(), parsed.KeyType())
 
 	alg, ok := parsed.Algorithm()
 	require.True(t, ok)
@@ -181,7 +181,7 @@ func TestJWKParsePublicKey(t *testing.T) {
 
 	parsed, err := jwk.ParseKey[jwk.Key](serialized)
 	require.NoError(t, err)
-	require.Equal(t, jwxmldsa.AKP(), parsed.KeyType())
+	require.Equal(t, jwa.AKP(), parsed.KeyType())
 	require.False(t, parsed.(jwk.AsymmetricKey).IsPrivate())
 }
 
@@ -261,8 +261,8 @@ func TestPublicKey(t *testing.T) {
 	pubJWK, err := privJWK.PublicKey()
 	require.NoError(t, err)
 	require.False(t, pubJWK.(jwk.AsymmetricKey).IsPrivate())
-	require.True(t, pubJWK.Has(jwxmldsa.AKPPubKey))
-	require.False(t, pubJWK.Has(jwxmldsa.AKPPrivKey))
+	require.True(t, pubJWK.Has(jwk.AKPPubKey))
+	require.False(t, pubJWK.Has(jwk.AKPPrivKey))
 }
 
 func TestValidate(t *testing.T) {
@@ -279,15 +279,16 @@ func TestValidate(t *testing.T) {
 
 	t.Run("missing alg", func(t *testing.T) {
 		t.Parallel()
-		key := json.RawMessage(`{"kty":"AKP","pub":"AAAA"}`)
-		_, err := jwk.ParseKey[jwk.Key]([]byte(key))
-		require.Error(t, err)
+		data := json.RawMessage(`{"kty":"AKP","pub":"AAAA"}`)
+		key, err := jwk.ParseKey[jwk.Key]([]byte(data))
+		require.NoError(t, err)
+		require.Error(t, key.Validate())
 	})
 
 	t.Run("missing pub", func(t *testing.T) {
 		t.Parallel()
-		key := json.RawMessage(`{"kty":"AKP","alg":"ML-DSA-65"}`)
-		_, err := jwk.ParseKey[jwk.Key]([]byte(key))
+		data := json.RawMessage(`{"kty":"AKP","alg":"ML-DSA-65"}`)
+		_, err := jwk.ParseKey[jwk.Key]([]byte(data))
 		require.Error(t, err)
 	})
 }

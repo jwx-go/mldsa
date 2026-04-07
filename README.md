@@ -35,7 +35,7 @@ This registers:
 import (
     "filippo.io/mldsa"
     jwxmldsa "github.com/jwx-go/mldsa"
-    "github.com/lestrrat-go/jwx/v3/jws"
+    "github.com/lestrrat-go/jwx/v4/jws"
 )
 
 sk, _ := mldsa.GenerateKey(mldsa.MLDSA65())
@@ -49,8 +49,8 @@ verified, _ := jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), sk.PublicKey()
 import (
     "filippo.io/mldsa"
     jwxmldsa "github.com/jwx-go/mldsa"
-    "github.com/lestrrat-go/jwx/v3/jwk"
-    "github.com/lestrrat-go/jwx/v3/jws"
+    "github.com/lestrrat-go/jwx/v4/jwk"
+    "github.com/lestrrat-go/jwx/v4/jws"
 )
 
 sk, _ := mldsa.GenerateKey(mldsa.MLDSA65())

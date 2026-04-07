@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e
 	github.com/lestrrat-go/dsig v1.1.0
-	github.com/lestrrat-go/jwx/v3 v3.0.0
+	github.com/lestrrat-go/jwx/v4 v4.0.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -17,4 +17,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/lestrrat-go/jwx/v3 => /home/lestrrat/dev/src/github.com/lestrrat-go/jwx/.worktrees/develop-v4
+replace github.com/lestrrat-go/jwx/v4 => /home/lestrrat/dev/src/github.com/lestrrat-go/jwx/.worktrees/develop-v4

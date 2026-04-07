@@ -16,32 +16,23 @@
 //
 //	import _ "github.com/jwx-go/mldsa"
 //
-// This registers the AKP key type, ML-DSA-44/65/87 signature algorithms,
-// JWK key parsing/import/export, and JWS signing/verification.
+// This registers ML-DSA-44/65/87 signature algorithms,
+// JWK key import/export, and JWS signing/verification for AKP keys.
 package mldsa
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"io"
-	"reflect"
 
 	"filippo.io/mldsa"
 	"github.com/lestrrat-go/dsig"
-	"github.com/lestrrat-go/jwx/v3/jwa"
-	"github.com/lestrrat-go/jwx/v3/jwk"
-	"github.com/lestrrat-go/jwx/v3/jws"
-	"github.com/lestrrat-go/jwx/v3/jws/jwsbb"
+	"github.com/lestrrat-go/jwx/v4/jwa"
+	"github.com/lestrrat-go/jwx/v4/jwk"
+	"github.com/lestrrat-go/jwx/v4/jwk/jwkunsafe"
+	"github.com/lestrrat-go/jwx/v4/jws"
+	"github.com/lestrrat-go/jwx/v4/jws/jwsbb"
 )
-
-const (
-	privateKeySize = 32 // ML-DSA seed size for all parameter sets
-)
-
-// AKP returns the AKP (Algorithm Key Pair) key type.
-func AKP() jwa.KeyType {
-	return jwa.NewKeyType("AKP")
-}
 
 // MLDSA44 returns the ML-DSA-44 signature algorithm.
 func MLDSA44() jwa.SignatureAlgorithm {
@@ -72,50 +63,25 @@ func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 	}
 }
 
-// pubKeySizeForAlg returns the expected public key size for the given algorithm.
-func pubKeySizeForAlg(alg string) (int, bool) {
-	switch alg {
-	case "ML-DSA-44":
-		return mldsa.MLDSA44PublicKeySize, true
-	case "ML-DSA-65":
-		return mldsa.MLDSA65PublicKeySize, true
-	case "ML-DSA-87":
-		return mldsa.MLDSA87PublicKeySize, true
-	default:
-		return 0, false
-	}
-}
-
 func init() {
-	// Register key type
-	jwa.RegisterKeyType(AKP())
-
 	// Register signature algorithms
 	jwa.RegisterSignatureAlgorithm(MLDSA44(), MLDSA65(), MLDSA87())
-
-	// Register probe field for "priv" to distinguish public/private AKP keys
-	if err := jwk.RegisterProbeField(reflect.StructField{
-		Name: "AKPPriv",
-		Type: reflect.TypeFor[json.RawMessage](),
-		Tag:  `json:"priv,omitempty"`,
-	}); err != nil {
-		panic(fmt.Sprintf("mldsa: failed to register probe field: %s", err))
-	}
-
-	// Register key parser
-	jwk.RegisterKeyParser(jwk.KeyParseFunc(parseAKPKey))
 
 	// Register key importers for raw mldsa key types
 	jwk.RegisterKeyImporter(importMLDSAPrivateKey)
 	jwk.RegisterKeyImporter(importMLDSAPublicKey)
 
-	// Register key exporter for AKP keys
-	jwk.RegisterKeyExporter(jwk.KeyKind("AKP"), jwk.KeyExportFunc(exportAKPKey))
+	// Register key exporters for ML-DSA algorithm-specific key kinds.
+	// jwx v4's AKP key returns KeyKind "AKP:<alg>", so we register per-algorithm.
+	// The fallback "AKP" exporter in jwx v4 handles ML-KEM only.
+	for _, algName := range []string{"ML-DSA-44", "ML-DSA-65", "ML-DSA-87"} {
+		jwk.RegisterKeyExporter(jwk.KeyKind("AKP:"+algName), jwk.KeyExportFunc(exportMLDSAKey))
+	}
 
 	// Associate algorithms with the AKP key type
-	jws.RegisterAlgorithmForKeyType(AKP(), MLDSA44())
-	jws.RegisterAlgorithmForKeyType(AKP(), MLDSA65())
-	jws.RegisterAlgorithmForKeyType(AKP(), MLDSA87())
+	jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA44())
+	jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA65())
+	jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA87())
 
 	// Register dsig algorithms (Custom family) and jwsbb mappings
 	for _, entry := range []struct {
@@ -144,63 +110,41 @@ func init() {
 	}
 }
 
-// parseAKPKey is the KeyParser for AKP key type.
-func parseAKPKey(probe *jwk.KeyProbe, unmarshaler jwk.KeyUnmarshaler, data []byte) (jwk.Key, error) {
-	ktyV, ok := probe.Field("Kty")
-	if !ok {
-		return nil, jwk.ContinueError()
-	}
-	kty, ok := ktyV.(string)
-	if !ok || kty != "AKP" {
-		return nil, jwk.ContinueError()
-	}
-
-	// Check if this is a private key by looking for the "priv" field
-	privV, _ := probe.Field("AKPPriv")
-	priv, _ := privV.(json.RawMessage)
-
-	var key jwk.Key
-	if priv != nil {
-		key = newAKPPrivateKey()
-	} else {
-		key = newAKPPublicKey()
-	}
-
-	if err := unmarshaler.UnmarshalKey(data, key); err != nil {
-		return nil, fmt.Errorf(`failed to unmarshal AKP key: %w`, err)
-	}
-	return key, nil
-}
-
 // importMLDSAPrivateKey converts a *mldsa.PrivateKey to a jwk.Key.
 func importMLDSAPrivateKey(raw *mldsa.PrivateKey) (jwk.Key, error) {
-	key := newAKPPrivateKey()
-
 	pub := raw.PublicKey()
 	params := pub.Parameters()
-	alg, err := jwa.KeyAlgorithmFrom(params.String())
+
+	key, err := jwkunsafe.NewKey(jwa.AKP())
 	if err != nil {
 		return nil, fmt.Errorf(`mldsa import: %w`, err)
 	}
-	key.algorithm = &alg
-	key.pub = pub.Bytes()
-	key.priv = raw.Bytes()
-
+	if err := key.Set(jwk.AlgorithmKey, params.String()); err != nil {
+		return nil, fmt.Errorf(`mldsa import: %w`, err)
+	}
+	if err := key.Set(jwk.AKPPubKey, pub.Bytes()); err != nil {
+		return nil, fmt.Errorf(`mldsa import: %w`, err)
+	}
+	if err := key.Set(jwk.AKPPrivKey, raw.Bytes()); err != nil {
+		return nil, fmt.Errorf(`mldsa import: %w`, err)
+	}
 	return key, nil
 }
 
 // importMLDSAPublicKey converts a *mldsa.PublicKey to a jwk.Key.
 func importMLDSAPublicKey(raw *mldsa.PublicKey) (jwk.Key, error) {
-	key := newAKPPublicKey()
-
 	params := raw.Parameters()
-	alg, err := jwa.KeyAlgorithmFrom(params.String())
+
+	key, err := jwkunsafe.NewPublicKey(jwa.AKP())
 	if err != nil {
 		return nil, fmt.Errorf(`mldsa import: %w`, err)
 	}
-	key.algorithm = &alg
-	key.pub = raw.Bytes()
-
+	if err := key.Set(jwk.AlgorithmKey, params.String()); err != nil {
+		return nil, fmt.Errorf(`mldsa import: %w`, err)
+	}
+	if err := key.Set(jwk.AKPPubKey, raw.Bytes()); err != nil {
+		return nil, fmt.Errorf(`mldsa import: %w`, err)
+	}
 	return key, nil
 }
 
@@ -230,8 +174,8 @@ func (a *mldsaDsigAlgorithm) Verify(key any, payload, signature []byte) error {
 	}
 }
 
-// exportAKPKey converts a jwk.Key to a raw mldsa key type.
-func exportAKPKey(key jwk.Key, hint any) (any, error) {
+// exportMLDSAKey converts a jwk.Key to a raw mldsa key type.
+func exportMLDSAKey(key jwk.Key, hint any) (any, error) {
 	algV, ok := key.Algorithm()
 	if !ok {
 		return nil, fmt.Errorf(`missing "alg" field`)
@@ -239,10 +183,10 @@ func exportAKPKey(key jwk.Key, hint any) (any, error) {
 
 	params, err := paramsForAlg(algV.String())
 	if err != nil {
-		return nil, err
+		return nil, jwk.ContinueError()
 	}
 
-	pubV, ok := key.Field(AKPPubKey)
+	pubV, ok := key.Field(jwk.AKPPubKey)
 	if !ok {
 		return nil, fmt.Errorf(`missing "pub" field`)
 	}
@@ -251,7 +195,7 @@ func exportAKPKey(key jwk.Key, hint any) (any, error) {
 		return nil, fmt.Errorf(`"pub" field is not []byte`)
 	}
 
-	privV, hasPriv := key.Field(AKPPrivKey)
+	privV, hasPriv := key.Field(jwk.AKPPrivKey)
 	if hasPriv {
 		privBytes, ok := privV.([]byte)
 		if !ok {
@@ -263,15 +207,8 @@ func exportAKPKey(key jwk.Key, hint any) (any, error) {
 			return nil, fmt.Errorf(`failed to construct ML-DSA private key: %w`, err)
 		}
 
-		// Verify that the public key matches
-		derivedPub := sk.PublicKey().Bytes()
-		if len(derivedPub) != len(pubBytes) {
+		if derivedPub := sk.PublicKey().Bytes(); !bytes.Equal(derivedPub, pubBytes) {
 			return nil, fmt.Errorf(`"pub" does not match derived public key`)
-		}
-		for i := range derivedPub {
-			if derivedPub[i] != pubBytes[i] {
-				return nil, fmt.Errorf(`"pub" does not match derived public key`)
-			}
 		}
 
 		return sk, nil

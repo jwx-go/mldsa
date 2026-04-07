@@ -8,7 +8,7 @@ ML-DSA is a post-quantum digital signature scheme. This module bridges the `fili
 
 ## Architecture
 
-This module implements a custom `jwk.Key` type (`AKP`) and registers ML-DSA algorithms via jwx's extension point system. It bypasses `jwsbb`/`dsig` entirely, using custom `jws.Signer`/`jws.Verifier` implementations that call `filippo.io/mldsa` directly.
+This module implements a custom `jwk.Key` type (`AKP`) and registers ML-DSA algorithms via jwx's extension point system. ML-DSA algorithms are registered with `dsig` as Custom family algorithms and mapped through `jwsbb`. The `jws.Signer`/`jws.Verifier` implementations unwrap JWK keys and delegate to `jwsbb.Sign`/`jwsbb.Verify`, which dispatches through `dsig`.
 
 ### JWK Key Type: AKP (Algorithm Key Pair)
 
@@ -30,8 +30,10 @@ Follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-di
 | `jwk` | `RegisterProbeField()` | Register `priv` probe for pub/priv distinction |
 | `jwk` | `RegisterKeyImporter()` | Convert `*mldsa.PrivateKey`/`*mldsa.PublicKey` to `jwk.Key` |
 | `jwk` | `RegisterKeyExporter()` | Convert `jwk.Key` to raw ML-DSA keys |
-| `jws` | `RegisterSigner()` | ML-DSA signing (3 algorithms) |
-| `jws` | `RegisterVerifier()` | ML-DSA verification (3 algorithms) |
+| `dsig` | `RegisterAlgorithm()` | Register ML-DSA as Custom family dsig algorithms |
+| `jwsbb` | `RegisterDsigAlgorithm()` | Map JWS algorithm names to dsig algorithm names |
+| `jws` | `RegisterSigner()` | ML-DSA signing (unwrap JWK, delegate to jwsbb) |
+| `jws` | `RegisterVerifier()` | ML-DSA verification (unwrap JWK, delegate to jwsbb) |
 | `jws` | `RegisterAlgorithmForKeyType()` | Associate algorithms with AKP key type |
 
 ### Key Implementation Note

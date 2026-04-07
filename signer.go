@@ -5,10 +5,12 @@ import (
 
 	"filippo.io/mldsa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
+	"github.com/lestrrat-go/jwx/v3/jws/jwsbb"
 )
 
 type mldsaSigner struct {
-	params *mldsa.Parameters
+	algName string
+	params  *mldsa.Parameters
 }
 
 func (s *mldsaSigner) Sign(key any, payload []byte) ([]byte, error) {
@@ -16,7 +18,7 @@ func (s *mldsaSigner) Sign(key any, payload []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`mldsa.Sign: %w`, err)
 	}
-	return sk.Sign(nil, payload, nil)
+	return jwsbb.Sign(sk, s.algName, payload, nil)
 }
 
 func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, error) {

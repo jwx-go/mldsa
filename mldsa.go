@@ -15,12 +15,15 @@ package mldsa
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 
 	"filippo.io/mldsa"
+	"github.com/lestrrat-go/dsig"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jws"
+	"github.com/lestrrat-go/jwx/v3/jws/jwsbb"
 )
 
 const (
@@ -106,19 +109,28 @@ func init() {
 	jws.RegisterAlgorithmForKeyType(AKP(), MLDSA65())
 	jws.RegisterAlgorithmForKeyType(AKP(), MLDSA87())
 
-	// Register signers and verifiers
+	// Register dsig algorithms (Custom family) and jwsbb mappings
 	for _, entry := range []struct {
+		name   string
 		alg    jwa.SignatureAlgorithm
 		params *mldsa.Parameters
 	}{
-		{MLDSA44(), mldsa.MLDSA44()},
-		{MLDSA65(), mldsa.MLDSA65()},
-		{MLDSA87(), mldsa.MLDSA87()},
+		{"ML-DSA-44", MLDSA44(), mldsa.MLDSA44()},
+		{"ML-DSA-65", MLDSA65(), mldsa.MLDSA65()},
+		{"ML-DSA-87", MLDSA87(), mldsa.MLDSA87()},
 	} {
-		if err := jws.RegisterSigner(entry.alg, &mldsaSigner{params: entry.params}); err != nil {
+		if err := dsig.RegisterAlgorithm(entry.name, dsig.AlgorithmInfo{
+			Family: dsig.Custom,
+			Meta:   &mldsaDsigAlgorithm{params: entry.params},
+		}); err != nil {
+			panic(fmt.Sprintf("mldsa: failed to register dsig algorithm %s: %s", entry.name, err))
+		}
+		jwsbb.RegisterDsigAlgorithm(entry.name, entry.name)
+
+		if err := jws.RegisterSigner(entry.alg, &mldsaSigner{algName: entry.name, params: entry.params}); err != nil {
 			panic(fmt.Sprintf("mldsa: failed to register signer for %s: %s", entry.alg, err))
 		}
-		if err := jws.RegisterVerifier(entry.alg, &mldsaVerifier{params: entry.params}); err != nil {
+		if err := jws.RegisterVerifier(entry.alg, &mldsaVerifier{algName: entry.name, params: entry.params}); err != nil {
 			panic(fmt.Sprintf("mldsa: failed to register verifier for %s: %s", entry.alg, err))
 		}
 	}
@@ -182,6 +194,32 @@ func importMLDSAPublicKey(raw *mldsa.PublicKey) (jwk.Key, error) {
 	key.pub = raw.Bytes()
 
 	return key, nil
+}
+
+// mldsaDsigAlgorithm implements dsig.Signer and dsig.Verifier for ML-DSA.
+// It handles raw *mldsa.PrivateKey / *mldsa.PublicKey only — JWK key
+// unwrapping is done by the jws.Signer/Verifier layer above.
+type mldsaDsigAlgorithm struct {
+	params *mldsa.Parameters
+}
+
+func (a *mldsaDsigAlgorithm) Sign(key any, payload []byte, _ io.Reader) ([]byte, error) {
+	sk, ok := key.(*mldsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf(`mldsa dsig.Sign: expected *mldsa.PrivateKey, got %T`, key)
+	}
+	return sk.Sign(nil, payload, nil)
+}
+
+func (a *mldsaDsigAlgorithm) Verify(key any, payload, signature []byte) error {
+	switch k := key.(type) {
+	case *mldsa.PublicKey:
+		return mldsa.Verify(k, payload, signature, nil)
+	case *mldsa.PrivateKey:
+		return mldsa.Verify(k.PublicKey(), payload, signature, nil)
+	default:
+		return fmt.Errorf(`mldsa dsig.Verify: expected *mldsa.PublicKey or *mldsa.PrivateKey, got %T`, key)
+	}
 }
 
 // exportAKPKey converts a jwk.Key to a raw mldsa key type.

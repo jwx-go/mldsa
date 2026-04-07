@@ -5,10 +5,12 @@ import (
 
 	"filippo.io/mldsa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
+	"github.com/lestrrat-go/jwx/v3/jws/jwsbb"
 )
 
 type mldsaVerifier struct {
-	params *mldsa.Parameters
+	algName string
+	params  *mldsa.Parameters
 }
 
 func (v *mldsaVerifier) Verify(key any, payload, signature []byte) error {
@@ -16,7 +18,7 @@ func (v *mldsaVerifier) Verify(key any, payload, signature []byte) error {
 	if err != nil {
 		return fmt.Errorf(`mldsa.Verify: %w`, err)
 	}
-	return mldsa.Verify(pk, payload, signature, nil)
+	return jwsbb.Verify(pk, v.algName, payload, signature)
 }
 
 func extractPublicKey(key any, params *mldsa.Parameters) (*mldsa.PublicKey, error) {

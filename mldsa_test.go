@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-go/jwx/v4/jws"
 	"github.com/stretchr/testify/require"
 
-	jwxmldsa "github.com/jwx-go/mldsa"
+	jwxmldsa "github.com/jwx-go/mldsa/v4"
 )
 
 func TestAlgorithmConstants(t *testing.T) {

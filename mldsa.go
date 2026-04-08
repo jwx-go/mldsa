@@ -14,7 +14,7 @@
 //
 // Import this package for its side effects to enable ML-DSA support:
 //
-//	import _ "github.com/jwx-go/mldsa"
+//	import _ "github.com/jwx-go/mldsa/v4"
 //
 // This registers ML-DSA-44/65/87 signature algorithms,
 // JWK key import/export, and JWS signing/verification for AKP keys.

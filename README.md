@@ -11,7 +11,7 @@ This module adds post-quantum ML-DSA digital signature support to jwx, enabling 
 ## Installation
 
 ```
-go get github.com/jwx-go/mldsa
+go get github.com/jwx-go/mldsa/v4
 ```
 
 ## Usage
@@ -19,7 +19,7 @@ go get github.com/jwx-go/mldsa
 Import this package to register ML-DSA algorithms with jwx:
 
 ```go
-import _ "github.com/jwx-go/mldsa"
+import _ "github.com/jwx-go/mldsa/v4"
 ```
 
 This registers:
@@ -34,7 +34,7 @@ This registers:
 ```go
 import (
     "filippo.io/mldsa"
-    jwxmldsa "github.com/jwx-go/mldsa"
+    jwxmldsa "github.com/jwx-go/mldsa/v4"
     "github.com/lestrrat-go/jwx/v4/jws"
 )
 
@@ -48,7 +48,7 @@ verified, _ := jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), sk.PublicKey()
 ```go
 import (
     "filippo.io/mldsa"
-    jwxmldsa "github.com/jwx-go/mldsa"
+    jwxmldsa "github.com/jwx-go/mldsa/v4"
     "github.com/lestrrat-go/jwx/v4/jwk"
     "github.com/lestrrat-go/jwx/v4/jws"
 )

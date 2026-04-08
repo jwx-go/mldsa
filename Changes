@@ -1,0 +1,5 @@
+Changes
+=======
+
+v4.0.0-alpha1 8 Apr 2026
+  * Initial version, ML-DSA (FIPS 204) support for github.com/lestrrat-go/jwx/v4.

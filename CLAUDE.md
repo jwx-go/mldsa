@@ -61,3 +61,15 @@ GOEXPERIMENT=jsonv2 go test ./...
 | `signer.go` | `mldsaSigner` implementing `jws.Signer` |
 | `verifier.go` | `mldsaVerifier` implementing `jws.Verifier` |
 | `mldsa_test.go` | Tests |
+
+## Branch Policy
+
+| Branch | Purpose |
+|--------|---------|
+| `v*` (e.g. `v4`) | Release tags only. NEVER commit directly to these branches. |
+| `develop/v*` (e.g. `develop/v4`) | Active development. All feature branches merge here. |
+| Feature branches | Branch from `develop/v*`, merge back via PR. |
+
+- Tags are cut from `v*` branches.
+- `v*` branches should never be directly worked on.
+- Regular development happens on `develop/v*` and feature branches.

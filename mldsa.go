@@ -18,6 +18,11 @@
 //
 // This registers ML-DSA-44/65/87 signature algorithms,
 // JWK key import/export, and JWS signing/verification for AKP keys.
+//
+// Registration happens in init(). If any underlying jwx Register* call
+// returns an error, init() panics — importing this package will crash the
+// program at load time. This is the house style across all jwx-go extension
+// modules.
 package mldsa
 
 import (
@@ -66,23 +71,23 @@ func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 
 func init() {
 	// Register signature algorithms
-	jwa.RegisterSignatureAlgorithm(MLDSA44(), MLDSA65(), MLDSA87())
+	panicOnRegistrationError(jwa.RegisterSignatureAlgorithm(MLDSA44(), MLDSA65(), MLDSA87()))
 
 	// Register key importers for raw mldsa key types
-	jwk.RegisterKeyImporter(importMLDSAPrivateKey)
-	jwk.RegisterKeyImporter(importMLDSAPublicKey)
+	panicOnRegistrationError(jwk.RegisterKeyImporter(importMLDSAPrivateKey))
+	panicOnRegistrationError(jwk.RegisterKeyImporter(importMLDSAPublicKey))
 
 	// Register key exporters for ML-DSA algorithm-specific key kinds.
 	// jwx v4's AKP key returns KeyKind "AKP:<alg>", so we register per-algorithm.
 	// The fallback "AKP" exporter in jwx v4 handles ML-KEM only.
 	for _, algName := range []string{"ML-DSA-44", "ML-DSA-65", "ML-DSA-87"} {
-		jwk.RegisterKeyExporter(jwk.KeyKind("AKP:"+algName), jwk.KeyExportFunc(exportMLDSAKey))
+		panicOnRegistrationError(jwk.RegisterKeyExporter(jwk.KeyKind("AKP:"+algName), jwk.KeyExportFunc(exportMLDSAKey)))
 	}
 
 	// Associate algorithms with the AKP key type
-	jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA44())
-	jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA65())
-	jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA87())
+	panicOnRegistrationError(jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA44()))
+	panicOnRegistrationError(jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA65()))
+	panicOnRegistrationError(jws.RegisterAlgorithmForKeyType(jwa.AKP(), MLDSA87()))
 
 	// Register dsig algorithms (Custom family) and jwsbb mappings
 	for _, entry := range []struct {
@@ -98,16 +103,23 @@ func init() {
 			Family: dsig.Custom,
 			Meta:   &mldsaDsigAlgorithm{params: entry.params},
 		}); err != nil {
-			panic(fmt.Sprintf("mldsa: failed to register dsig algorithm %s: %s", entry.name, err))
+			panic(fmt.Sprintf("jwx-go/mldsa: failed to register dsig algorithm %s: %s", entry.name, err))
 		}
-		jwsbb.RegisterDsigAlgorithm(entry.name, entry.name)
+		panicOnRegistrationError(jwsbb.RegisterDsigAlgorithm(entry.name, entry.name))
 
-		if err := jws.RegisterSigner(entry.alg, &mldsaSigner{algName: entry.name, params: entry.params}); err != nil {
-			panic(fmt.Sprintf("mldsa: failed to register signer for %s: %s", entry.alg, err))
-		}
-		if err := jws.RegisterVerifier(entry.alg, &mldsaVerifier{algName: entry.name, params: entry.params}); err != nil {
-			panic(fmt.Sprintf("mldsa: failed to register verifier for %s: %s", entry.alg, err))
-		}
+		panicOnRegistrationError(jws.RegisterSigner(entry.alg, &mldsaSigner{algName: entry.name, params: entry.params}))
+		panicOnRegistrationError(jws.RegisterVerifier(entry.alg, &mldsaVerifier{algName: entry.name, params: entry.params}))
+	}
+}
+
+// panicOnRegistrationError converts a non-nil error returned by a jwx
+// Register* call during init() into an import-time panic. The rule
+// (documented in jwx's internals.md) is that a failed Register* leaves
+// the extension unusable, so we surface it immediately instead of
+// letting the program continue in a broken state.
+func panicOnRegistrationError(err error) {
+	if err != nil {
+		panic(fmt.Sprintf("jwx-go/mldsa: registration failed: %s", err))
 	}
 }
 

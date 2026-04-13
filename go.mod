@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e
 	github.com/lestrrat-go/dsig v1.2.1
-	github.com/lestrrat-go/jwx/v4 v4.0.0-scratch.14
+	github.com/lestrrat-go/jwx/v4 v4.0.0-scratch.15
 	github.com/stretchr/testify v1.11.1
 )
 

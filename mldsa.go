@@ -22,6 +22,7 @@ package mldsa
 
 import (
 	"bytes"
+	"crypto"
 	"fmt"
 	"io"
 
@@ -163,6 +164,19 @@ func (a *mldsaDsigAlgorithm) Sign(key any, payload []byte, _ io.Reader) ([]byte,
 	return sk.Sign(nil, payload, nil)
 }
 
+// SignWithOpts implements dsig.SignerWithOpts. If opts is an *mldsa.Options,
+// its Context field is forwarded to filippo.io/mldsa, enabling callers
+// (notably the composite-signature scheme in github.com/jwx-go/compsig)
+// to supply the per-algorithm domain-separation context required by the
+// JOSE composite-signatures draft.
+func (a *mldsaDsigAlgorithm) SignWithOpts(key any, payload []byte, opts crypto.SignerOpts, _ io.Reader) ([]byte, error) {
+	sk, ok := key.(*mldsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf(`mldsa dsig.SignWithOpts: expected *mldsa.PrivateKey, got %T`, key)
+	}
+	return sk.Sign(nil, payload, opts)
+}
+
 func (a *mldsaDsigAlgorithm) Verify(key any, payload, signature []byte) error {
 	switch k := key.(type) {
 	case *mldsa.PublicKey:
@@ -171,6 +185,20 @@ func (a *mldsaDsigAlgorithm) Verify(key any, payload, signature []byte) error {
 		return mldsa.Verify(k.PublicKey(), payload, signature, nil)
 	default:
 		return fmt.Errorf(`mldsa dsig.Verify: expected *mldsa.PublicKey or *mldsa.PrivateKey, got %T`, key)
+	}
+}
+
+// VerifyWithOpts implements dsig.VerifierWithOpts. The Context from an
+// *mldsa.Options (if non-nil) is forwarded to filippo.io/mldsa.Verify.
+func (a *mldsaDsigAlgorithm) VerifyWithOpts(key any, payload, signature []byte, opts crypto.SignerOpts) error {
+	mldsaOpts, _ := opts.(*mldsa.Options)
+	switch k := key.(type) {
+	case *mldsa.PublicKey:
+		return mldsa.Verify(k, payload, signature, mldsaOpts)
+	case *mldsa.PrivateKey:
+		return mldsa.Verify(k.PublicKey(), payload, signature, mldsaOpts)
+	default:
+		return fmt.Errorf(`mldsa dsig.VerifyWithOpts: expected *mldsa.PublicKey or *mldsa.PrivateKey, got %T`, key)
 	}
 }
 

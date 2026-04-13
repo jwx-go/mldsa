@@ -1,6 +1,17 @@
 Changes
 =======
 
+v4.0.0-alpha3 13 Apr 2026
+  * Implement `dsig.SignerWithOpts` / `dsig.VerifierWithOpts` on
+    `mldsaDsigAlgorithm`, forwarding `*mldsa.Options.Context` to
+    `filippo.io/mldsa`. This lets composite ML-DSA callers (notably
+    `github.com/jwx-go/compsig/v4`) supply the per-algorithm
+    domain-separation context that `draft-ietf-jose-pq-composite-sigs`
+    §4.2 step 3 requires, without bypassing the `dsig` dispatcher.
+
+  * Bump `github.com/lestrrat-go/dsig` from v1.2.1 to v1.3.0 (which
+    introduced the `SignerWithOpts` / `VerifierWithOpts` interfaces).
+
 v4.0.0-alpha2 13 Apr 2026
   * Compatibility release for jwx/v4 v4.0.0-scratch.15. No code changes.
 

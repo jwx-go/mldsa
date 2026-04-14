@@ -246,7 +246,7 @@ func dsigPublicKey(key any) (*mldsa.PublicKey, error) {
 }
 
 // exportMLDSAKey converts a jwk.Key to a raw mldsa key type.
-func exportMLDSAKey(key jwk.Key, hint any) (any, error) {
+func exportMLDSAKey(key jwk.Key, _ any) (any, error) {
 	algV, ok := key.Algorithm()
 	if !ok {
 		return nil, fmt.Errorf(`missing "alg" field`)

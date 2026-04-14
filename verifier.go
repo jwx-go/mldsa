@@ -25,9 +25,16 @@ func (v *mldsaVerifier) Verify(key any, payload, signature []byte) error {
 func extractPublicKey(key any, params *mldsa.Parameters) (*mldsa.PublicKey, error) {
 	switch k := key.(type) {
 	case *mldsa.PublicKey:
+		if err := requireParamsMatch(k.Parameters(), params); err != nil {
+			return nil, err
+		}
 		return k, nil
 	case *mldsa.PrivateKey:
-		return k.PublicKey(), nil
+		pk := k.PublicKey()
+		if err := requireParamsMatch(pk.Parameters(), params); err != nil {
+			return nil, err
+		}
+		return pk, nil
 	case jwk.Key:
 		if k.KeyType() != jwa.AKP() {
 			return nil, fmt.Errorf(`expected AKP key type, got %s`, k.KeyType())

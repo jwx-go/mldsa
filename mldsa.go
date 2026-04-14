@@ -55,6 +55,18 @@ func MLDSA87() jwa.SignatureAlgorithm {
 	return jwa.NewSignatureAlgorithm("ML-DSA-87")
 }
 
+// requireParamsMatch verifies that a caller-supplied key's parameter set
+// matches the algorithm's registered parameter set. filippo.io/mldsa
+// returns package-level singletons from MLDSA44/65/87, so pointer
+// equality is sufficient. Mismatch indicates an alg/key confusion
+// attempt (EXT-010).
+func requireParamsMatch(got, want *mldsa.Parameters) error {
+	if got != want {
+		return fmt.Errorf(`ML-DSA parameter set mismatch: key is %s, algorithm is %s`, got, want)
+	}
+	return nil
+}
+
 // paramsForAlg returns the mldsa.Parameters for the given algorithm string.
 func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 	switch alg {
@@ -173,6 +185,9 @@ func (a *mldsaDsigAlgorithm) Sign(key any, payload []byte, _ io.Reader) ([]byte,
 	if !ok {
 		return nil, fmt.Errorf(`mldsa dsig.Sign: expected *mldsa.PrivateKey, got %T`, key)
 	}
+	if err := requireParamsMatch(sk.PublicKey().Parameters(), a.params); err != nil {
+		return nil, fmt.Errorf(`mldsa dsig.Sign: %w`, err)
+	}
 	return sk.Sign(nil, payload, nil)
 }
 
@@ -186,31 +201,47 @@ func (a *mldsaDsigAlgorithm) SignWithOpts(key any, payload []byte, opts crypto.S
 	if !ok {
 		return nil, fmt.Errorf(`mldsa dsig.SignWithOpts: expected *mldsa.PrivateKey, got %T`, key)
 	}
+	if err := requireParamsMatch(sk.PublicKey().Parameters(), a.params); err != nil {
+		return nil, fmt.Errorf(`mldsa dsig.SignWithOpts: %w`, err)
+	}
 	return sk.Sign(nil, payload, opts)
 }
 
 func (a *mldsaDsigAlgorithm) Verify(key any, payload, signature []byte) error {
-	switch k := key.(type) {
-	case *mldsa.PublicKey:
-		return mldsa.Verify(k, payload, signature, nil)
-	case *mldsa.PrivateKey:
-		return mldsa.Verify(k.PublicKey(), payload, signature, nil)
-	default:
-		return fmt.Errorf(`mldsa dsig.Verify: expected *mldsa.PublicKey or *mldsa.PrivateKey, got %T`, key)
+	pk, err := dsigPublicKey(key)
+	if err != nil {
+		return fmt.Errorf(`mldsa dsig.Verify: %w`, err)
 	}
+	if err := requireParamsMatch(pk.Parameters(), a.params); err != nil {
+		return fmt.Errorf(`mldsa dsig.Verify: %w`, err)
+	}
+	return mldsa.Verify(pk, payload, signature, nil)
 }
 
 // VerifyWithOpts implements dsig.VerifierWithOpts. The Context from an
 // *mldsa.Options (if non-nil) is forwarded to filippo.io/mldsa.Verify.
 func (a *mldsaDsigAlgorithm) VerifyWithOpts(key any, payload, signature []byte, opts crypto.SignerOpts) error {
+	pk, err := dsigPublicKey(key)
+	if err != nil {
+		return fmt.Errorf(`mldsa dsig.VerifyWithOpts: %w`, err)
+	}
+	if err := requireParamsMatch(pk.Parameters(), a.params); err != nil {
+		return fmt.Errorf(`mldsa dsig.VerifyWithOpts: %w`, err)
+	}
 	mldsaOpts, _ := opts.(*mldsa.Options)
+	return mldsa.Verify(pk, payload, signature, mldsaOpts)
+}
+
+// dsigPublicKey normalizes the key types accepted by the dsig Verify
+// surface to a *mldsa.PublicKey.
+func dsigPublicKey(key any) (*mldsa.PublicKey, error) {
 	switch k := key.(type) {
 	case *mldsa.PublicKey:
-		return mldsa.Verify(k, payload, signature, mldsaOpts)
+		return k, nil
 	case *mldsa.PrivateKey:
-		return mldsa.Verify(k.PublicKey(), payload, signature, mldsaOpts)
+		return k.PublicKey(), nil
 	default:
-		return fmt.Errorf(`mldsa dsig.VerifyWithOpts: expected *mldsa.PublicKey or *mldsa.PrivateKey, got %T`, key)
+		return nil, fmt.Errorf(`expected *mldsa.PublicKey or *mldsa.PrivateKey, got %T`, key)
 	}
 }
 

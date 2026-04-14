@@ -2,6 +2,7 @@ package mldsa_test
 
 import (
 	"crypto"
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/lestrrat-go/jwx/v4/jwa"
 	"github.com/lestrrat-go/jwx/v4/jwk"
 	"github.com/lestrrat-go/jwx/v4/jws"
+	"github.com/lestrrat-go/jwx/v4/jws/jwsbb"
 	"github.com/stretchr/testify/require"
 
 	jwxmldsa "github.com/jwx-go/mldsa/v4"
@@ -311,4 +313,110 @@ func TestCrossAlgorithmRejection(t *testing.T) {
 
 	_, err = jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA44(), sk65.PublicKey()))
 	require.Error(t, err)
+}
+
+// TestParamSetConfusionAttack pins the EXT-010 key/alg confusion fix.
+//
+// filippo.io/mldsa binds the parameter set to the key object, so a
+// *mldsa.PublicKey from an ML-DSA-65 keypair will happily verify an
+// ML-DSA-65 signature even if the caller asked for ML-DSA-44. Without
+// an explicit cross-check between the caller-supplied raw key and the
+// algorithm's registered parameter set, a peer that trusts the JWS
+// protected header for PQ-security-level policy can be misled about
+// which parameter set actually signed the payload.
+//
+// Each subtest exercises one of four attack surfaces by pairing a
+// routeAlg (claimed on the wire) with a key generated under a
+// different parameter set. All four surfaces must reject with
+// "parameter set mismatch".
+func TestParamSetConfusionAttack(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		routeAlg jwa.SignatureAlgorithm
+		keyGen   *mldsa.Parameters
+	}{
+		{"ML-DSA-65-as-ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA65()},
+		{"ML-DSA-87-as-ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA87()},
+		{"ML-DSA-87-as-ML-DSA-65", jwxmldsa.MLDSA65(), mldsa.MLDSA87()},
+		{"ML-DSA-44-as-ML-DSA-65", jwxmldsa.MLDSA65(), mldsa.MLDSA44()},
+		{"ML-DSA-44-as-ML-DSA-87", jwxmldsa.MLDSA87(), mldsa.MLDSA44()},
+		{"ML-DSA-65-as-ML-DSA-87", jwxmldsa.MLDSA87(), mldsa.MLDSA65()},
+	}
+
+	payload := []byte("EXT-010 parameter-set confusion reproducer")
+
+	for _, tc := range cases {
+		t.Run("jws.Sign/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			sk, err := mldsa.GenerateKey(tc.keyGen)
+			require.NoError(t, err)
+			_, err = jws.Sign(payload, jws.WithKey(tc.routeAlg, sk))
+			require.Error(t, err)
+			require.ErrorContains(t, err, "parameter set mismatch")
+		})
+
+		t.Run("jwsbb.Sign/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			sk, err := mldsa.GenerateKey(tc.keyGen)
+			require.NoError(t, err)
+			_, err = jwsbb.Sign(sk, tc.routeAlg.String(), payload, nil)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "parameter set mismatch")
+		})
+
+		t.Run("jws.Verify/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			// Build a wire-level forgery independently of jws.Sign:
+			// hand-craft a compact JWS whose header claims routeAlg
+			// but whose signature is a real mldsa.Sign under the
+			// wrong parameter set. This guarantees a valid signature
+			// reaches the verifier even with the sign-side fix in place.
+			sk, err := mldsa.GenerateKey(tc.keyGen)
+			require.NoError(t, err)
+			pk := sk.PublicKey()
+
+			forged := forgeCompactJWS(t, sk, tc.routeAlg.String(), payload)
+
+			_, err = jws.Verify(forged, jws.WithKey(tc.routeAlg, pk))
+			require.Error(t, err)
+			require.ErrorContains(t, err, "parameter set mismatch")
+		})
+
+		t.Run("jwsbb.Verify/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			sk, err := mldsa.GenerateKey(tc.keyGen)
+			require.NoError(t, err)
+			pk := sk.PublicKey()
+
+			signingInput := []byte("direct-dsig-" + tc.name)
+			sig, err := sk.Sign(nil, signingInput, nil)
+			require.NoError(t, err)
+
+			err = jwsbb.Verify(pk, tc.routeAlg.String(), signingInput, sig)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "parameter set mismatch")
+		})
+	}
+}
+
+// forgeCompactJWS constructs a compact JWS by hand, using mldsa.Sign
+// directly so the resulting signature is byte-valid under sk's own
+// parameter set regardless of what algHeader claims.
+func forgeCompactJWS(t *testing.T, sk *mldsa.PrivateKey, algHeader string, payload []byte) []byte {
+	t.Helper()
+
+	hdr, err := json.Marshal(map[string]string{"alg": algHeader})
+	require.NoError(t, err)
+
+	b64 := base64.RawURLEncoding
+	encHdr := b64.EncodeToString(hdr)
+	encPayload := b64.EncodeToString(payload)
+	signingInput := []byte(encHdr + "." + encPayload)
+
+	sig, err := sk.Sign(nil, signingInput, nil)
+	require.NoError(t, err)
+
+	return []byte(encHdr + "." + encPayload + "." + b64.EncodeToString(sig))
 }

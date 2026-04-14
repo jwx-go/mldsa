@@ -25,6 +25,9 @@ func (s *mldsaSigner) Sign(key any, payload []byte) ([]byte, error) {
 func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, error) {
 	switch k := key.(type) {
 	case *mldsa.PrivateKey:
+		if err := requireParamsMatch(k.PublicKey().Parameters(), params); err != nil {
+			return nil, err
+		}
 		return k, nil
 	case jwk.Key:
 		if k.KeyType() != jwa.AKP() {

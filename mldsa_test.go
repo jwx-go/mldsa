@@ -420,3 +420,53 @@ func forgeCompactJWS(t *testing.T, sk *mldsa.PrivateKey, algHeader string, paylo
 
 	return []byte(encHdr + "." + encPayload + "." + b64.EncodeToString(sig))
 }
+
+// TestSignVerifyWithOptsTypeMismatch pins that a non-nil crypto.SignerOpts
+// whose concrete type is not *mldsa.Options is rejected instead of silently
+// coerced to nil. The silent-coerce behavior would let a caller believe their
+// Context field was being honored while the verifier ran with ctx="" —
+// a signature-substitution vector for composite signatures (jwx-go/compsig).
+func TestSignVerifyWithOptsTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	sk, err := mldsa.GenerateKey(mldsa.MLDSA65())
+	require.NoError(t, err)
+	pk := sk.PublicKey()
+
+	msg := []byte("mldsa opts type mismatch regression")
+
+	t.Run("Sign rejects non-*mldsa.Options opts", func(t *testing.T) {
+		t.Parallel()
+		_, err := jwsbb.SignWithOpts(sk, "ML-DSA-65", msg, crypto.SHA256, nil)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "expected *mldsa.Options")
+	})
+
+	t.Run("Verify rejects non-*mldsa.Options opts", func(t *testing.T) {
+		t.Parallel()
+		sig, err := jwsbb.Sign(sk, "ML-DSA-65", msg, nil)
+		require.NoError(t, err)
+
+		err = jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, crypto.SHA256)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "expected *mldsa.Options")
+	})
+
+	t.Run("Sign/Verify accept nil opts", func(t *testing.T) {
+		t.Parallel()
+		sig, err := jwsbb.SignWithOpts(sk, "ML-DSA-65", msg, nil, nil)
+		require.NoError(t, err)
+		require.NoError(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, nil))
+	})
+
+	t.Run("Sign/Verify honor *mldsa.Options Context", func(t *testing.T) {
+		t.Parallel()
+		opts := &mldsa.Options{Context: "jwx-test-ctx"}
+		sig, err := jwsbb.SignWithOpts(sk, "ML-DSA-65", msg, opts, nil)
+		require.NoError(t, err)
+		require.NoError(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, opts))
+
+		wrong := &mldsa.Options{Context: "different"}
+		require.Error(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, wrong))
+	})
+}

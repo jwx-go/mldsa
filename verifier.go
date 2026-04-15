@@ -39,6 +39,14 @@ func extractPublicKey(key any, params *mldsa.Parameters) (*mldsa.PublicKey, erro
 		if k.KeyType() != jwa.AKP() {
 			return nil, fmt.Errorf(`expected AKP key type, got %s`, k.KeyType())
 		}
+		if alg, ok := k.Algorithm(); ok {
+			keyParams, err := paramsForAlg(alg.String())
+			if err == nil {
+				if err := requireParamsMatch(keyParams, params); err != nil {
+					return nil, err
+				}
+			}
+		}
 
 		pubV, ok := k.Field(jwk.AKPPubKey)
 		if !ok {

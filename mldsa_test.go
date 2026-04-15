@@ -325,9 +325,9 @@ func TestCrossAlgorithmRejection(t *testing.T) {
 // protected header for PQ-security-level policy can be misled about
 // which parameter set actually signed the payload.
 //
-// Each subtest exercises one of four attack surfaces by pairing a
+// Each subtest exercises one of five attack surfaces by pairing a
 // routeAlg (claimed on the wire) with a key generated under a
-// different parameter set. All four surfaces must reject with
+// different parameter set. All five surfaces must reject with
 // "parameter set mismatch".
 func TestParamSetConfusionAttack(t *testing.T) {
 	t.Parallel()
@@ -382,6 +382,22 @@ func TestParamSetConfusionAttack(t *testing.T) {
 			_, err = jws.Verify(forged, jws.WithKey(tc.routeAlg, pk))
 			require.Error(t, err)
 			require.ErrorContains(t, err, "parameter set mismatch")
+		})
+
+		t.Run("jws.Verify/JWK/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			sk, err := mldsa.GenerateKey(tc.keyGen)
+			require.NoError(t, err)
+
+			pubJWK, err := jwk.Import[jwk.Key](sk.PublicKey())
+			require.NoError(t, err)
+
+			forged := forgeCompactJWS(t, sk, tc.routeAlg.String(), payload)
+
+			_, err = jws.Verify(forged, jws.WithKey(tc.routeAlg, pubJWK))
+			require.Error(t, err)
+			require.ErrorContains(t, err, "parameter set mismatch")
+			require.NotContains(t, err.Error(), "failed to construct ML-DSA public key")
 		})
 
 		t.Run("jwsbb.Verify/"+tc.name, func(t *testing.T) {

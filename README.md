@@ -22,6 +22,13 @@ Import this package to register ML-DSA algorithms with jwx:
 import _ "github.com/jwx-go/mldsa/v4"
 ```
 
+> **Note:** Registration happens in `init()` and will **panic** if any of
+> the ML-DSA algorithms, key types, or importers/exporters fail to register
+> (for example, if another module has already claimed the same identifier).
+> This is intentional: a half-registered extension would silently produce
+> "algorithm not found" errors at signing or verification time, so the
+> failure is raised at program start instead.
+
 This registers:
 
 - **Key type**: AKP (Algorithm Key Pair)

@@ -8,13 +8,13 @@ ML-DSA is a post-quantum digital signature scheme. This module bridges the `fili
 
 ## Architecture
 
-This module implements a custom `jwk.Key` type (`AKP`) and registers ML-DSA algorithms via jwx's extension point system. ML-DSA algorithms are registered with `dsig` as Custom family algorithms and mapped through `jwsbb`. The `jws.Signer`/`jws.Verifier` implementations unwrap JWK keys and delegate to `jwsbb.Sign`/`jwsbb.Verify`, which dispatches through `dsig`.
+The `AKP` (Algorithm Key Pair) `jwk.Key` type is provided by the jwx main module itself. This companion only plugs ML-DSA into jwx's extension points: it registers the ML-DSA signature algorithms, raw-key importers/exporters, and `jws.Signer`/`jws.Verifier` implementations. ML-DSA algorithms are registered with `dsig` as Custom family algorithms and mapped through `jwsbb`. The signer/verifier unwrap the AKP JWK key and delegate to `jwsbb.Sign`/`jwsbb.Verify`, which dispatches through `dsig`.
 
 ### JWK Key Type: AKP (Algorithm Key Pair)
 
-Follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-dilithium/draft-ietf-cose-dilithium.html):
+AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-dilithium/draft-ietf-cose-dilithium.html) and is defined in jwx's main `jwk` package — this module does not re-implement it:
 
-- `kty`: `"AKP"` (read-only)
+- `kty`: `"AKP"`
 - `alg`: `"ML-DSA-44"` / `"ML-DSA-65"` / `"ML-DSA-87"` (REQUIRED)
 - `pub`: base64url-encoded public key bytes (REQUIRED)
 - `priv`: base64url-encoded 32-byte seed (private keys only)
@@ -22,23 +22,18 @@ Follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-di
 
 ### Registration Points
 
+All registrations happen in `mldsa.go`'s `init()`. Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
+
 | JWX Package | Registration Function | Purpose |
 |-------------|----------------------|---------|
-| `jwa` | `RegisterKeyType()` | Register AKP key type |
 | `jwa` | `RegisterSignatureAlgorithm()` | Register ML-DSA-44, ML-DSA-65, ML-DSA-87 |
-| `jwk` | `RegisterKeyParser()` | Parse AKP JWK JSON |
-| `jwk` | `RegisterProbeField()` | Register `priv` probe for pub/priv distinction |
-| `jwk` | `RegisterKeyImporter()` | Convert `*mldsa.PrivateKey`/`*mldsa.PublicKey` to `jwk.Key` |
-| `jwk` | `RegisterKeyExporter()` | Convert `jwk.Key` to raw ML-DSA keys |
+| `jwk` | `RegisterKeyImporter()` | Convert `*mldsa.PrivateKey` / `*mldsa.PublicKey` to `jwk.Key` |
+| `jwk` | `RegisterKeyExporter()` | Convert AKP `jwk.Key` (per-alg `KeyKind` `"AKP:ML-DSA-<n>"`) to raw ML-DSA keys |
 | `dsig` | `RegisterAlgorithm()` | Register ML-DSA as Custom family dsig algorithms |
 | `jwsbb` | `RegisterDsigAlgorithm()` | Map JWS algorithm names to dsig algorithm names |
 | `jws` | `RegisterSigner()` | ML-DSA signing (unwrap JWK, delegate to jwsbb) |
 | `jws` | `RegisterVerifier()` | ML-DSA verification (unwrap JWK, delegate to jwsbb) |
-| `jws` | `RegisterAlgorithmForKeyType()` | Associate algorithms with AKP key type |
-
-### Key Implementation Note
-
-The `akpPublicKey` and `akpPrivateKey` types implement the full `jwk.Key` interface from scratch (including all standard JWK header fields). This is necessary because jwx does not provide an embeddable base key type for external modules. This boilerplate could be refactored if jwx adds such a type.
+| `jws` | `RegisterAlgorithmForKeyType()` | Associate algorithms with `jwa.AKP()` |
 
 ### Dependency on filippo.io/mldsa
 
@@ -56,8 +51,7 @@ GOEXPERIMENT=jsonv2 go test ./...
 
 | File | Purpose |
 |------|---------|
-| `mldsa.go` | Package doc, algorithm constants, `init()` registration, key parser/importer/exporter |
-| `key.go` | `akpPublicKey` and `akpPrivateKey` implementing `jwk.Key` |
+| `mldsa.go` | Package doc, algorithm constants, `init()` registration, raw-key importers/exporter, `dsig` algorithm adapter |
 | `signer.go` | `mldsaSigner` implementing `jws.Signer` |
 | `verifier.go` | `mldsaVerifier` implementing `jws.Verifier` |
 | `mldsa_test.go` | Tests |

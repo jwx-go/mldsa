@@ -366,6 +366,20 @@ func TestParamSetConfusionAttack(t *testing.T) {
 			require.ErrorContains(t, err, "parameter set mismatch")
 		})
 
+		t.Run("jws.Sign/JWK/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			sk, err := mldsa.GenerateKey(tc.keyGen)
+			require.NoError(t, err)
+
+			privJWK, err := jwk.Import[jwk.Key](sk)
+			require.NoError(t, err)
+
+			_, err = jws.Sign(payload, jws.WithKey(tc.routeAlg, privJWK))
+			require.Error(t, err)
+			require.ErrorContains(t, err, "parameter set mismatch")
+			require.NotContains(t, err.Error(), "failed to construct ML-DSA private key")
+		})
+
 		t.Run("jws.Verify/"+tc.name, func(t *testing.T) {
 			t.Parallel()
 			// Build a wire-level forgery independently of jws.Sign:

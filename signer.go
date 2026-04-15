@@ -33,6 +33,14 @@ func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, er
 		if k.KeyType() != jwa.AKP() {
 			return nil, fmt.Errorf(`expected AKP key type, got %s`, k.KeyType())
 		}
+		if alg, ok := k.Algorithm(); ok {
+			keyParams, err := paramsForAlg(alg.String())
+			if err == nil {
+				if err := requireParamsMatch(keyParams, params); err != nil {
+					return nil, err
+				}
+			}
+		}
 
 		privV, ok := k.Field(jwk.AKPPrivKey)
 		if !ok {

@@ -37,7 +37,7 @@ All registrations happen in `mldsa.go`'s `init()`. Key type registration, AKP JW
 
 ### Dependency on filippo.io/mldsa
 
-This module currently depends on `filippo.io/mldsa` for the underlying ML-DSA implementation. Once Go ships `crypto/mldsa` (tracking: https://github.com/golang/go/issues/77626), this module will migrate to the standard library implementation and this separate module may become unnecessary — the support could move directly into jwx.
+This module depends on `filippo.io/mldsa` for the underlying ML-DSA implementation. Upstream has published no semver tags; the dependency is pinned to pseudo-version `v0.0.0-20260215214346-43d0283efc3e` (commit `43d0283efc3e`, 2026-02-15). Cryptographic integrity is anchored by the `h1:` hashes in `go.sum` — do not bump without updating both. The pin will be revisited when either (a) filippo.io/mldsa cuts a tagged release, or (b) Go ships `crypto/mldsa` (https://github.com/golang/go/issues/77626), at which point this module migrates to the standard library and may be deprecated entirely. See `mldsa.go` package doc for the bridge rationale.
 
 ## Build / Test
 

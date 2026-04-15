@@ -3,7 +3,7 @@ module github.com/jwx-go/mldsa/v4
 go 1.26.0
 
 require (
-	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e
+	filippo.io/mldsa v0.0.0-20260215214346-43d0283efc3e // untagged pseudo-version — see CLAUDE.md "Dependency on filippo.io/mldsa" for audit notes
 	github.com/lestrrat-go/dsig v1.3.0
 	github.com/lestrrat-go/jwx/v4 v4.0.0-scratch.19
 	github.com/stretchr/testify v1.11.1

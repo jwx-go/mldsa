@@ -191,11 +191,15 @@ func (a *mldsaDsigAlgorithm) Sign(key any, payload []byte, _ io.Reader) ([]byte,
 	return sk.Sign(nil, payload, nil)
 }
 
-// SignWithOpts implements dsig.SignerWithOpts. If opts is an *mldsa.Options,
-// its Context field is forwarded to filippo.io/mldsa, enabling callers
-// (notably the composite-signature scheme in github.com/jwx-go/compsig)
-// to supply the per-algorithm domain-separation context required by the
-// JOSE composite-signatures draft.
+// SignWithOpts implements dsig.SignerWithOpts. If opts is non-nil it must be
+// of concrete type *mldsa.Options; its Context field is forwarded to
+// filippo.io/mldsa, enabling callers (notably the composite-signature scheme
+// in github.com/jwx-go/compsig) to supply the per-algorithm domain-separation
+// context required by the JOSE composite-signatures draft. A non-nil opts of
+// any other type is rejected with an error rather than silently coerced to
+// nil — a silent coerce would make a caller believe their Context was being
+// honored while ctx="" was actually being used, a signature-substitution
+// vector for composite signatures.
 func (a *mldsaDsigAlgorithm) SignWithOpts(key any, payload []byte, opts crypto.SignerOpts, _ io.Reader) ([]byte, error) {
 	sk, ok := key.(*mldsa.PrivateKey)
 	if !ok {
@@ -203,6 +207,11 @@ func (a *mldsaDsigAlgorithm) SignWithOpts(key any, payload []byte, opts crypto.S
 	}
 	if err := requireParamsMatch(sk.PublicKey().Parameters(), a.params); err != nil {
 		return nil, fmt.Errorf(`mldsa dsig.SignWithOpts: %w`, err)
+	}
+	if opts != nil {
+		if _, ok := opts.(*mldsa.Options); !ok {
+			return nil, fmt.Errorf(`mldsa dsig.SignWithOpts: expected *mldsa.Options, got %T`, opts)
+		}
 	}
 	return sk.Sign(nil, payload, opts)
 }
@@ -218,8 +227,10 @@ func (a *mldsaDsigAlgorithm) Verify(key any, payload, signature []byte) error {
 	return mldsa.Verify(pk, payload, signature, nil)
 }
 
-// VerifyWithOpts implements dsig.VerifierWithOpts. The Context from an
-// *mldsa.Options (if non-nil) is forwarded to filippo.io/mldsa.Verify.
+// VerifyWithOpts implements dsig.VerifierWithOpts. If opts is non-nil it
+// must be of concrete type *mldsa.Options; its Context field is forwarded to
+// filippo.io/mldsa.Verify. A non-nil opts of any other type is rejected
+// rather than silently coerced to nil — see SignWithOpts for the rationale.
 func (a *mldsaDsigAlgorithm) VerifyWithOpts(key any, payload, signature []byte, opts crypto.SignerOpts) error {
 	pk, err := dsigPublicKey(key)
 	if err != nil {
@@ -228,7 +239,14 @@ func (a *mldsaDsigAlgorithm) VerifyWithOpts(key any, payload, signature []byte, 
 	if err := requireParamsMatch(pk.Parameters(), a.params); err != nil {
 		return fmt.Errorf(`mldsa dsig.VerifyWithOpts: %w`, err)
 	}
-	mldsaOpts, _ := opts.(*mldsa.Options)
+	var mldsaOpts *mldsa.Options
+	if opts != nil {
+		var ok bool
+		mldsaOpts, ok = opts.(*mldsa.Options)
+		if !ok {
+			return fmt.Errorf(`mldsa dsig.VerifyWithOpts: expected *mldsa.Options, got %T`, opts)
+		}
+	}
 	return mldsa.Verify(pk, payload, signature, mldsaOpts)
 }
 

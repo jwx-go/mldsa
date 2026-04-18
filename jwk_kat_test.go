@@ -28,9 +28,9 @@ const (
 	// key instead of the seed.
 	katSeedPriv = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
 
-	kat44Thumbprint = "DMAhooeM0wf77uAWwk394SaeGXdt5XfPBsGS_qax_qY"
-	kat65Thumbprint = "luap0SeHkNWK1qVHaCqHXqMfJ1RKFa6Ry52Kh4M8ZKw"
-	kat87Thumbprint = "SdVQEd86rJ1UJdmk6SyLqwH33pU78A5hkXYGFOYeZkA"
+	kat44Thumbprint = "_YL2mufzZyKURVN-IIfSsPWrlJ4ytLUBQ4FeEB7TMTE"
+	kat65Thumbprint = "HSkk5TOX0Mpqu1lx4_U1vVv1G7gA6UFJibKXXVT4Big"
+	kat87Thumbprint = "LmmWhatIVnE_o9xXCHfv2hS8MRfamWyTu8oNWOmLDNQ"
 )
 
 // TestJWKKnownAnswers pins the JWK marshaling output for ML-DSA-44/65/87
@@ -120,7 +120,7 @@ func TestJWKKnownAnswers(t *testing.T) {
 
 			// Round-trip: parse the serialized JWK and re-marshal,
 			// expecting byte-identical output for the pinned fields.
-			parsed, err := jwk.ParseKey[jwk.Key](serialized)
+			parsed, err := jwk.ParseKeyAs[jwk.Key](serialized)
 			require.NoError(t, err)
 
 			reSerialized, err := json.Marshal(parsed)

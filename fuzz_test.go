@@ -95,7 +95,7 @@ func FuzzJWKRoundTrip(f *testing.F) {
 	f.Add([]byte(`{"kty":"AKP","alg":"ML-DSA-65","pub":"AAAA"}`))
 
 	f.Fuzz(func(_ *testing.T, data []byte) {
-		parsed, err := jwk.ParseKey[jwk.Key](data)
+		parsed, err := jwk.ParseKeyAs[jwk.Key](data)
 		if err != nil {
 			return
 		}
@@ -105,6 +105,6 @@ func FuzzJWKRoundTrip(f *testing.F) {
 			return
 		}
 
-		_, _ = jwk.ParseKey[jwk.Key](buf)
+		_, _ = jwk.ParseKeyAs[jwk.Key](buf)
 	})
 }

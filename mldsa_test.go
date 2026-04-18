@@ -146,7 +146,7 @@ func TestJWKParseSerialization(t *testing.T) {
 	require.Contains(t, m, "priv")
 
 	// Parse back
-	parsed, err := jwk.ParseKey[jwk.Key](serialized)
+	parsed, err := jwk.ParseKeyAs[jwk.Key](serialized)
 	require.NoError(t, err)
 	require.Equal(t, jwa.AKP(), parsed.KeyType())
 
@@ -181,7 +181,7 @@ func TestJWKParsePublicKey(t *testing.T) {
 	require.Equal(t, "AKP", m["kty"])
 	require.NotContains(t, m, "priv")
 
-	parsed, err := jwk.ParseKey[jwk.Key](serialized)
+	parsed, err := jwk.ParseKeyAs[jwk.Key](serialized)
 	require.NoError(t, err)
 	require.Equal(t, jwa.AKP(), parsed.KeyType())
 	require.False(t, parsed.(jwk.AsymmetricKey).IsPrivate())
@@ -282,15 +282,14 @@ func TestValidate(t *testing.T) {
 	t.Run("missing alg", func(t *testing.T) {
 		t.Parallel()
 		data := json.RawMessage(`{"kty":"AKP","pub":"AAAA"}`)
-		key, err := jwk.ParseKey[jwk.Key]([]byte(data))
-		require.NoError(t, err)
-		require.Error(t, key.Validate())
+		_, err := jwk.ParseKeyAs[jwk.Key]([]byte(data))
+		require.Error(t, err)
 	})
 
 	t.Run("missing pub", func(t *testing.T) {
 		t.Parallel()
 		data := json.RawMessage(`{"kty":"AKP","alg":"ML-DSA-65"}`)
-		_, err := jwk.ParseKey[jwk.Key]([]byte(data))
+		_, err := jwk.ParseKeyAs[jwk.Key]([]byte(data))
 		require.Error(t, err)
 	})
 }

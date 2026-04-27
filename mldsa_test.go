@@ -499,3 +499,110 @@ func TestSignVerifyWithOptsTypeMismatch(t *testing.T) {
 		require.Error(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, wrong))
 	})
 }
+
+// TestJWKAlgValidation pins MLDSA-001: extractPrivateKey /
+// extractPublicKey must treat a missing or non-ML-DSA alg on the JWK
+// as a hard error rather than skipping the parameter-set check. The
+// 32-byte seed is the same length across all three ML-DSA variants,
+// so length-based filtering provides zero discrimination — without
+// the alg check, an attacker who controls the JWK can have the signer
+// produce a signature under a parameter set the JWK never claimed.
+func TestJWKAlgValidation(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte("alg-validation pin")
+
+	t.Run("Sign rejects JWK with missing alg", func(t *testing.T) {
+		t.Parallel()
+
+		sk, err := mldsa.GenerateKey(mldsa.MLDSA65())
+		require.NoError(t, err)
+		privJWK, err := jwk.Import[jwk.Key](sk)
+		require.NoError(t, err)
+		require.NoError(t, privJWK.Remove(jwk.AlgorithmKey),
+			`removing alg from AKP JWK should succeed`)
+
+		_, err = jws.Sign(payload, jws.WithKey(jwxmldsa.MLDSA65(), privJWK))
+		require.Error(t, err, `Sign should refuse an AKP JWK without alg`)
+	})
+
+	t.Run("Verify rejects JWK with missing alg", func(t *testing.T) {
+		t.Parallel()
+
+		sk, err := mldsa.GenerateKey(mldsa.MLDSA65())
+		require.NoError(t, err)
+		privJWK, err := jwk.Import[jwk.Key](sk)
+		require.NoError(t, err)
+		signed, err := jws.Sign(payload, jws.WithKey(jwxmldsa.MLDSA65(), privJWK))
+		require.NoError(t, err)
+
+		pubJWK, err := privJWK.PublicKey()
+		require.NoError(t, err)
+		require.NoError(t, pubJWK.Remove(jwk.AlgorithmKey))
+
+		_, err = jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), pubJWK))
+		require.Error(t, err, `Verify should refuse an AKP JWK without alg`)
+	})
+
+	t.Run("Sign rejects JWK whose alg is not an ML-DSA variant", func(t *testing.T) {
+		t.Parallel()
+
+		sk, err := mldsa.GenerateKey(mldsa.MLDSA65())
+		require.NoError(t, err)
+		privJWK, err := jwk.Import[jwk.Key](sk)
+		require.NoError(t, err)
+
+		// RS256 is a valid registered alg but not one of the three
+		// ML-DSA variants. paramsForAlg returns an error for it,
+		// which the buggy extractPrivateKey treats as "no further
+		// check needed" instead of "the JWK lied".
+		require.NoError(t, privJWK.Set(jwk.AlgorithmKey, jwa.RS256()))
+
+		_, err = jws.Sign(payload, jws.WithKey(jwxmldsa.MLDSA65(), privJWK))
+		require.Error(t, err, `Sign should refuse an AKP JWK with non-ML-DSA alg`)
+	})
+
+	t.Run("Verify rejects JWK whose alg is not an ML-DSA variant", func(t *testing.T) {
+		t.Parallel()
+
+		sk, err := mldsa.GenerateKey(mldsa.MLDSA65())
+		require.NoError(t, err)
+		privJWK, err := jwk.Import[jwk.Key](sk)
+		require.NoError(t, err)
+		signed, err := jws.Sign(payload, jws.WithKey(jwxmldsa.MLDSA65(), privJWK))
+		require.NoError(t, err)
+
+		pubJWK, err := privJWK.PublicKey()
+		require.NoError(t, err)
+		require.NoError(t, pubJWK.Set(jwk.AlgorithmKey, jwa.RS256()))
+
+		_, err = jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), pubJWK))
+		require.Error(t, err, `Verify should refuse an AKP JWK with non-ML-DSA alg`)
+	})
+}
+
+// TestJWKSignRejectsPubMismatch pins MLDSA-002: extractPrivateKey
+// must reject an AKP JWK whose "pub" field does not match the public
+// key derived from "priv". Without this check, the signer happily
+// produces a signature under the seed-derived public key, but
+// relying parties trusting the JWK's "pub" cannot verify it. The
+// exporter at exportMLDSAKey already enforces the comparison; the
+// signer path didn't.
+func TestJWKSignRejectsPubMismatch(t *testing.T) {
+	t.Parallel()
+
+	skA, err := mldsa.GenerateKey(mldsa.MLDSA65())
+	require.NoError(t, err)
+	skB, err := mldsa.GenerateKey(mldsa.MLDSA65())
+	require.NoError(t, err)
+
+	privJWK, err := jwk.Import[jwk.Key](skA)
+	require.NoError(t, err)
+
+	// Replace pub with a different key's public bytes; the priv field
+	// (skA's seed) now no longer derives to the stored pub.
+	require.NoError(t, privJWK.Set(jwk.AKPPubKey, skB.PublicKey().Bytes()))
+
+	_, err = jws.Sign([]byte("pub-mismatch pin"), jws.WithKey(jwxmldsa.MLDSA65(), privJWK))
+	require.Error(t, err, `Sign should refuse an AKP JWK whose pub does not match priv`)
+}

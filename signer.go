@@ -1,6 +1,7 @@
 package mldsa
 
 import (
+	"bytes"
 	"fmt"
 
 	"filippo.io/mldsa"
@@ -33,13 +34,16 @@ func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, er
 		if k.KeyType() != jwa.AKP() {
 			return nil, fmt.Errorf(`expected AKP key type, got %s`, k.KeyType())
 		}
-		if alg, ok := k.Algorithm(); ok {
-			keyParams, err := paramsForAlg(alg.String())
-			if err == nil {
-				if err := requireParamsMatch(keyParams, params); err != nil {
-					return nil, err
-				}
-			}
+		alg, ok := k.Algorithm()
+		if !ok {
+			return nil, fmt.Errorf(`AKP key is missing required "alg" field`)
+		}
+		keyParams, err := paramsForAlg(alg.String())
+		if err != nil {
+			return nil, fmt.Errorf(`AKP key "alg" is not an ML-DSA variant: %w`, err)
+		}
+		if err := requireParamsMatch(keyParams, params); err != nil {
+			return nil, err
 		}
 
 		privV, ok := k.Field(jwk.AKPPrivKey)
@@ -51,9 +55,21 @@ func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, er
 			return nil, fmt.Errorf(`"priv" field is not []byte`)
 		}
 
+		pubV, ok := k.Field(jwk.AKPPubKey)
+		if !ok {
+			return nil, fmt.Errorf(`key does not contain "pub" field`)
+		}
+		pubBytes, ok := pubV.([]byte)
+		if !ok {
+			return nil, fmt.Errorf(`"pub" field is not []byte`)
+		}
+
 		sk, err := mldsa.NewPrivateKey(params, privBytes)
 		if err != nil {
 			return nil, fmt.Errorf(`failed to construct ML-DSA private key: %w`, err)
+		}
+		if !bytes.Equal(sk.PublicKey().Bytes(), pubBytes) {
+			return nil, fmt.Errorf(`AKP key "pub" does not match the public key derived from "priv"`)
 		}
 		return sk, nil
 	default:

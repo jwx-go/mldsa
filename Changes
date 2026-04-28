@@ -1,6 +1,12 @@
 Changes
 =======
 
+v4.0.1 28 Apr 2026
+  * Strict JWK validation in `extractPrivateKey` / `extractPublicKey`:
+    enforce that the JWK `alg` matches the requested ML-DSA parameter
+    set, and that the embedded public key matches the seed-derived
+    public key on the private-key path.
+
 v4.0.0 19 Apr 2026
   * First stable v4 release. Tracks github.com/lestrrat-go/jwx/v4 v4.0.0.
   * `dsig.SignerWithOpts` / `dsig.VerifierWithOpts` now reject a non-nil

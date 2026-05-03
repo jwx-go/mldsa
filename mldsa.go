@@ -86,8 +86,8 @@ func init() {
 	panicOnRegistrationError(jwa.RegisterSignatureAlgorithm(MLDSA44(), MLDSA65(), MLDSA87()))
 
 	// Register key importers for raw mldsa key types
-	panicOnRegistrationError(jwk.RegisterKeyImporter(importMLDSAPrivateKey))
-	panicOnRegistrationError(jwk.RegisterKeyImporter(importMLDSAPublicKey))
+	panicOnRegistrationError(jwk.RegisterKeyImporter(jwk.KeyImportFunc[*mldsa.PrivateKey](importMLDSAPrivateKey)))
+	panicOnRegistrationError(jwk.RegisterKeyImporter(jwk.KeyImportFunc[*mldsa.PublicKey](importMLDSAPublicKey)))
 
 	// Register key exporters for ML-DSA algorithm-specific key kinds.
 	// jwx v4's AKP key returns KeyKind "AKP:<alg>", so we register per-algorithm.

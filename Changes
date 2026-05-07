@@ -1,6 +1,13 @@
 Changes
 =======
 
+v4.0.2 7 May 2026
+  * Adopt v4 `RegisterKeyImporter` signature: now takes
+    `KeyImporter[T]` rather than a typed function, matching the
+    interface-plus-FooFunc-adapter pattern used elsewhere in
+    jwx's `jwk` extension surface.
+  * Bump `github.com/lestrrat-go/jwx/v4` to v4.0.2.
+
 v4.0.1 28 Apr 2026
   * Strict JWK validation in `extractPrivateKey` / `extractPublicKey`:
     enforce that the JWK `alg` matches the requested ML-DSA parameter

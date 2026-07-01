@@ -58,21 +58,21 @@ func TestJWKKnownAnswers(t *testing.T) {
 		expectedThumb string
 	}{
 		{
-			name:          "ML-DSA-44",
+			name:          algMLDSA44,
 			params:        mldsa.MLDSA44(),
 			expectedPub:   kat44Pub,
 			expectedPriv:  katSeedPriv,
 			expectedThumb: kat44Thumbprint,
 		},
 		{
-			name:          "ML-DSA-65",
+			name:          algMLDSA65,
 			params:        mldsa.MLDSA65(),
 			expectedPub:   kat65Pub,
 			expectedPriv:  katSeedPriv,
 			expectedThumb: kat65Thumbprint,
 		},
 		{
-			name:          "ML-DSA-87",
+			name:          algMLDSA87,
 			params:        mldsa.MLDSA87(),
 			expectedPub:   kat87Pub,
 			expectedPriv:  katSeedPriv,

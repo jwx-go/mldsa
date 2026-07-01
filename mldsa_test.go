@@ -16,6 +16,14 @@ import (
 	jwxmldsa "github.com/jwx-go/mldsa/v4"
 )
 
+// Algorithm name strings for the three ML-DSA parameter sets, shared
+// across the tests in this package.
+const (
+	algMLDSA44 = "ML-DSA-44"
+	algMLDSA65 = "ML-DSA-65"
+	algMLDSA87 = "ML-DSA-87"
+)
+
 func TestAlgorithmConstants(t *testing.T) {
 	t.Parallel()
 
@@ -26,18 +34,18 @@ func TestAlgorithmConstants(t *testing.T) {
 
 	t.Run("signature algorithms", func(t *testing.T) {
 		t.Parallel()
-		require.Equal(t, "ML-DSA-44", jwxmldsa.MLDSA44().String())
-		require.Equal(t, "ML-DSA-65", jwxmldsa.MLDSA65().String())
-		require.Equal(t, "ML-DSA-87", jwxmldsa.MLDSA87().String())
+		require.Equal(t, algMLDSA44, jwxmldsa.MLDSA44().String())
+		require.Equal(t, algMLDSA65, jwxmldsa.MLDSA65().String())
+		require.Equal(t, algMLDSA87, jwxmldsa.MLDSA87().String())
 	})
 
 	t.Run("lookup registered algorithms", func(t *testing.T) {
 		t.Parallel()
-		_, ok := jwa.LookupSignatureAlgorithm("ML-DSA-44")
+		_, ok := jwa.LookupSignatureAlgorithm(algMLDSA44)
 		require.True(t, ok)
-		_, ok = jwa.LookupSignatureAlgorithm("ML-DSA-65")
+		_, ok = jwa.LookupSignatureAlgorithm(algMLDSA65)
 		require.True(t, ok)
-		_, ok = jwa.LookupSignatureAlgorithm("ML-DSA-87")
+		_, ok = jwa.LookupSignatureAlgorithm(algMLDSA87)
 		require.True(t, ok)
 	})
 
@@ -57,9 +65,9 @@ func TestSignVerifyRaw(t *testing.T) {
 		alg    jwa.SignatureAlgorithm
 		params *mldsa.Parameters
 	}{
-		{"ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA44()},
-		{"ML-DSA-65", jwxmldsa.MLDSA65(), mldsa.MLDSA65()},
-		{"ML-DSA-87", jwxmldsa.MLDSA87(), mldsa.MLDSA87()},
+		{algMLDSA44, jwxmldsa.MLDSA44(), mldsa.MLDSA44()},
+		{algMLDSA65, jwxmldsa.MLDSA65(), mldsa.MLDSA65()},
+		{algMLDSA87, jwxmldsa.MLDSA87(), mldsa.MLDSA87()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -93,9 +101,9 @@ func TestSignVerifyJWK(t *testing.T) {
 		alg    jwa.SignatureAlgorithm
 		params *mldsa.Parameters
 	}{
-		{"ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA44()},
-		{"ML-DSA-65", jwxmldsa.MLDSA65(), mldsa.MLDSA65()},
-		{"ML-DSA-87", jwxmldsa.MLDSA87(), mldsa.MLDSA87()},
+		{algMLDSA44, jwxmldsa.MLDSA44(), mldsa.MLDSA44()},
+		{algMLDSA65, jwxmldsa.MLDSA65(), mldsa.MLDSA65()},
+		{algMLDSA87, jwxmldsa.MLDSA87(), mldsa.MLDSA87()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -141,7 +149,7 @@ func TestJWKParseSerialization(t *testing.T) {
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(serialized, &m))
 	require.Equal(t, "AKP", m["kty"])
-	require.Equal(t, "ML-DSA-65", m["alg"])
+	require.Equal(t, algMLDSA65, m["alg"])
 	require.Contains(t, m, "pub")
 	require.Contains(t, m, "priv")
 
@@ -152,7 +160,7 @@ func TestJWKParseSerialization(t *testing.T) {
 
 	alg, ok := parsed.Algorithm()
 	require.True(t, ok)
-	require.Equal(t, "ML-DSA-65", alg.String())
+	require.Equal(t, algMLDSA65, alg.String())
 
 	// Sign with parsed key, verify with original
 	payload := []byte("round-trip test")
@@ -194,9 +202,9 @@ func TestKeyImportExport(t *testing.T) {
 		name   string
 		params *mldsa.Parameters
 	}{
-		{"ML-DSA-44", mldsa.MLDSA44()},
-		{"ML-DSA-65", mldsa.MLDSA65()},
-		{"ML-DSA-87", mldsa.MLDSA87()},
+		{algMLDSA44, mldsa.MLDSA44()},
+		{algMLDSA65, mldsa.MLDSA65()},
+		{algMLDSA87, mldsa.MLDSA87()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -466,37 +474,37 @@ func TestSignVerifyWithOptsTypeMismatch(t *testing.T) {
 
 	t.Run("Sign rejects non-*mldsa.Options opts", func(t *testing.T) {
 		t.Parallel()
-		_, err := jwsbb.SignWithOpts(sk, "ML-DSA-65", msg, crypto.SHA256, nil)
+		_, err := jwsbb.SignWithOpts(sk, algMLDSA65, msg, crypto.SHA256, nil)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "expected *mldsa.Options")
 	})
 
 	t.Run("Verify rejects non-*mldsa.Options opts", func(t *testing.T) {
 		t.Parallel()
-		sig, err := jwsbb.Sign(sk, "ML-DSA-65", msg, nil)
+		sig, err := jwsbb.Sign(sk, algMLDSA65, msg, nil)
 		require.NoError(t, err)
 
-		err = jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, crypto.SHA256)
+		err = jwsbb.VerifyWithOpts(pk, algMLDSA65, msg, sig, crypto.SHA256)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "expected *mldsa.Options")
 	})
 
 	t.Run("Sign/Verify accept nil opts", func(t *testing.T) {
 		t.Parallel()
-		sig, err := jwsbb.SignWithOpts(sk, "ML-DSA-65", msg, nil, nil)
+		sig, err := jwsbb.SignWithOpts(sk, algMLDSA65, msg, nil, nil)
 		require.NoError(t, err)
-		require.NoError(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, nil))
+		require.NoError(t, jwsbb.VerifyWithOpts(pk, algMLDSA65, msg, sig, nil))
 	})
 
 	t.Run("Sign/Verify honor *mldsa.Options Context", func(t *testing.T) {
 		t.Parallel()
 		opts := &mldsa.Options{Context: "jwx-test-ctx"}
-		sig, err := jwsbb.SignWithOpts(sk, "ML-DSA-65", msg, opts, nil)
+		sig, err := jwsbb.SignWithOpts(sk, algMLDSA65, msg, opts, nil)
 		require.NoError(t, err)
-		require.NoError(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, opts))
+		require.NoError(t, jwsbb.VerifyWithOpts(pk, algMLDSA65, msg, sig, opts))
 
 		wrong := &mldsa.Options{Context: "different"}
-		require.Error(t, jwsbb.VerifyWithOpts(pk, "ML-DSA-65", msg, sig, wrong))
+		require.Error(t, jwsbb.VerifyWithOpts(pk, algMLDSA65, msg, sig, wrong))
 	})
 }
 

@@ -40,19 +40,27 @@ import (
 	"github.com/lestrrat-go/jwx/v4/jws/jwsbb"
 )
 
+// Algorithm name strings for the three ML-DSA parameter sets, as they
+// appear in the JWS "alg" header and in dsig/jwsbb registrations.
+const (
+	algMLDSA44 = "ML-DSA-44"
+	algMLDSA65 = "ML-DSA-65"
+	algMLDSA87 = "ML-DSA-87"
+)
+
 // MLDSA44 returns the ML-DSA-44 signature algorithm.
 func MLDSA44() jwa.SignatureAlgorithm {
-	return jwa.NewSignatureAlgorithm("ML-DSA-44")
+	return jwa.NewSignatureAlgorithm(algMLDSA44)
 }
 
 // MLDSA65 returns the ML-DSA-65 signature algorithm.
 func MLDSA65() jwa.SignatureAlgorithm {
-	return jwa.NewSignatureAlgorithm("ML-DSA-65")
+	return jwa.NewSignatureAlgorithm(algMLDSA65)
 }
 
 // MLDSA87 returns the ML-DSA-87 signature algorithm.
 func MLDSA87() jwa.SignatureAlgorithm {
-	return jwa.NewSignatureAlgorithm("ML-DSA-87")
+	return jwa.NewSignatureAlgorithm(algMLDSA87)
 }
 
 // requireParamsMatch verifies that a caller-supplied key's parameter set
@@ -70,11 +78,11 @@ func requireParamsMatch(got, want *mldsa.Parameters) error {
 // paramsForAlg returns the mldsa.Parameters for the given algorithm string.
 func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 	switch alg {
-	case "ML-DSA-44":
+	case algMLDSA44:
 		return mldsa.MLDSA44(), nil
-	case "ML-DSA-65":
+	case algMLDSA65:
 		return mldsa.MLDSA65(), nil
-	case "ML-DSA-87":
+	case algMLDSA87:
 		return mldsa.MLDSA87(), nil
 	default:
 		return nil, fmt.Errorf(`unknown ML-DSA algorithm %q`, alg)
@@ -92,7 +100,7 @@ func init() {
 	// Register key exporters for ML-DSA algorithm-specific key kinds.
 	// jwx v4's AKP key returns KeyKind "AKP:<alg>", so we register per-algorithm.
 	// The fallback "AKP" exporter in jwx v4 handles ML-KEM only.
-	for _, algName := range []string{"ML-DSA-44", "ML-DSA-65", "ML-DSA-87"} {
+	for _, algName := range []string{algMLDSA44, algMLDSA65, algMLDSA87} {
 		panicOnRegistrationError(jwk.RegisterKeyExporter(jwk.KeyKind("AKP:"+algName), jwk.KeyExportFunc(exportMLDSAKey)))
 	}
 
@@ -107,9 +115,9 @@ func init() {
 		alg    jwa.SignatureAlgorithm
 		params *mldsa.Parameters
 	}{
-		{"ML-DSA-44", MLDSA44(), mldsa.MLDSA44()},
-		{"ML-DSA-65", MLDSA65(), mldsa.MLDSA65()},
-		{"ML-DSA-87", MLDSA87(), mldsa.MLDSA87()},
+		{algMLDSA44, MLDSA44(), mldsa.MLDSA44()},
+		{algMLDSA65, MLDSA65(), mldsa.MLDSA65()},
+		{algMLDSA87, MLDSA87(), mldsa.MLDSA87()},
 	} {
 		if err := dsig.RegisterAlgorithm(entry.name, dsig.AlgorithmInfo{
 			Family: dsig.Custom,

@@ -20,9 +20,17 @@ AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cos
 - `priv`: base64url-encoded 32-byte seed (private keys only)
 - Thumbprint fields: `alg`, `kty`, `pub` in lexicographic order
 
+### Stand-down on native ML-DSA
+
+`init()` first probes `dsig.GetAlgorithmInfo("ML-DSA-44")` and returns early if it hits. jwx implements ML-DSA natively from Go 1.27 on, where `crypto/mldsa` is in the standard library, and re-registering the same names would make `dsig.RegisterAlgorithm` fail and this package panic at import.
+
+The probe is on `dsig` rather than on the Go version deliberately, so the module behaves correctly against any jwx release: an older jwx on Go 1.27 registers nothing, and this module still provides ML-DSA as before.
+
+When the module stands down, none of its registrations happen — including the `filippo.io/mldsa` key importers. Raw keys must then come from `crypto/mldsa`.
+
 ### Registration Points
 
-All registrations happen in `mldsa.go`'s `init()`. Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
+All registrations happen in `mldsa.go`'s `init()`, and only when the stand-down probe above does not fire. Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
 
 | JWX Package | Registration Function | Purpose |
 |-------------|----------------------|---------|

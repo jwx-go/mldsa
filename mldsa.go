@@ -4,13 +4,20 @@
 // [filippo.io/mldsa] into jwx's algorithm registration system, enabling
 // ML-DSA key types and signing/verification in JWK, JWS, and JWT workflows.
 //
-// This exists as a separate module because Go's standard library does not
-// yet include ML-DSA support, requiring the external [filippo.io/mldsa]
-// dependency. To avoid imposing this dependency on all jwx users, ML-DSA
-// support is provided as an opt-in extension. Once Go ships [crypto/mldsa]
-// (see https://github.com/golang/go/issues/77626), this module will migrate
-// to the standard library implementation and ML-DSA support may move directly
-// into jwx, at which point this module will be deprecated.
+// Deprecated: Go 1.27 ships crypto/mldsa, and jwx implements ML-DSA natively
+// from that version on. On Go 1.27 with a jwx release that has native ML-DSA,
+// importing this package does nothing: init detects the existing registration
+// and stands down, so the import is harmless but pointless. Drop it, replace
+// [filippo.io/mldsa] with crypto/mldsa, and use jwa.MLDSA44, jwa.MLDSA65, and
+// jwa.MLDSA87 in place of this package's accessors. Raw *mldsa.PrivateKey and
+// *mldsa.PublicKey values must come from crypto/mldsa in that setup — jwx's
+// signer does not accept filippo.io/mldsa key types. This module stays
+// supported for as long as jwx supports Go 1.26.
+//
+// This exists as a separate module because Go's standard library did not
+// include ML-DSA support before 1.27, requiring the external
+// [filippo.io/mldsa] dependency. To avoid imposing that dependency on all jwx
+// users, ML-DSA support was provided as an opt-in extension.
 //
 // Import this package for its side effects to enable ML-DSA support:
 //
@@ -90,6 +97,21 @@ func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 }
 
 func init() {
+	// Stand down when ML-DSA is already registered. From Go 1.27 on, jwx
+	// implements ML-DSA itself on top of crypto/mldsa, and registering these
+	// names a second time would fail — dsig rejects a duplicate algorithm
+	// name, which this package turns into an import-time panic. Yielding is
+	// the right call rather than racing: jws.Sign and jws.Verify dispatch on
+	// the algorithm name, so whoever registered first owns the behavior, and
+	// jwx's own implementation is the one its key types are built for.
+	//
+	// The probe is on dsig rather than on the Go version so that this works
+	// against any jwx release: an older jwx on Go 1.27 registers nothing, and
+	// this package still provides ML-DSA as it always has.
+	if _, ok := dsig.GetAlgorithmInfo(algMLDSA44); ok {
+		return
+	}
+
 	// Register signature algorithms
 	panicOnRegistrationError(jwa.RegisterSignatureAlgorithm(MLDSA44(), MLDSA65(), MLDSA87()))
 

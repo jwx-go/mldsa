@@ -22,9 +22,11 @@ AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cos
 
 ### Stand-down on native ML-DSA
 
-`init()` first probes `dsig.GetAlgorithmInfo("ML-DSA-44")` and returns early if it hits. jwx implements ML-DSA natively from Go 1.27 on, where `crypto/mldsa` is in the standard library, and re-registering the same names would make `dsig.RegisterAlgorithm` fail and this package panic at import.
+`init()` first probes `dsig.GetAlgorithmInfo("ML-DSA-44")` and returns early if it hits. jwx implements ML-DSA natively from **v4.4.0** on, when built with **Go 1.27** or later, where `crypto/mldsa` is in the standard library. Re-registering the same names would make `dsig.RegisterAlgorithm` fail and this package panic at import.
 
-The probe is on `dsig` rather than on the Go version deliberately, so the module behaves correctly against any jwx release: an older jwx on Go 1.27 registers nothing, and this module still provides ML-DSA as before.
+Both versions are required, so there are three cases where this module still does the work: jwx v4.3.0 or earlier on any toolchain, jwx v4.4.0 or later on Go 1.26 (its ML-DSA files are `//go:build go1.27`), and any jwx on Go 1.26.
+
+The probe is on `dsig` rather than on the Go version or the jwx version deliberately. It reports what is actually registered, so no version table has to be kept in sync here, and the module stays correct against jwx releases that did not exist when it was written.
 
 When the module stands down, none of its registrations happen — including the `filippo.io/mldsa` key importers. Raw keys must then come from `crypto/mldsa`.
 

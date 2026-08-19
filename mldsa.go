@@ -5,14 +5,19 @@
 // ML-DSA key types and signing/verification in JWK, JWS, and JWT workflows.
 //
 // Deprecated: Go 1.27 ships crypto/mldsa, and jwx implements ML-DSA natively
-// from that version on. On Go 1.27 with a jwx release that has native ML-DSA,
-// importing this package does nothing: init detects the existing registration
-// and stands down, so the import is harmless but pointless. Drop it, replace
-// [filippo.io/mldsa] with crypto/mldsa, and use jwa.MLDSA44, jwa.MLDSA65, and
-// jwa.MLDSA87 in place of this package's accessors. Raw *mldsa.PrivateKey and
+// from v4.4.0 on. Building with Go 1.27 and jwx v4.4.0 or later makes this
+// package redundant: init detects the existing registration and stands down,
+// so the import is harmless but pointless. Drop it, replace [filippo.io/mldsa]
+// with crypto/mldsa, and use jwa.MLDSA44, jwa.MLDSA65, and jwa.MLDSA87 in
+// place of this package's accessors. Raw *mldsa.PrivateKey and
 // *mldsa.PublicKey values must come from crypto/mldsa in that setup — jwx's
-// signer does not accept filippo.io/mldsa key types. This module stays
-// supported for as long as jwx supports Go 1.26.
+// signer does not accept filippo.io/mldsa key types.
+//
+// Both versions matter. jwx v4.3.0 and earlier register no ML-DSA on any
+// toolchain, and jwx v4.4.0 built with Go 1.26 does the same, because its
+// ML-DSA files are constrained to go1.27. This package is still the way to get
+// ML-DSA in either case, and stays supported for as long as jwx supports
+// Go 1.26.
 //
 // This exists as a separate module because Go's standard library did not
 // include ML-DSA support before 1.27, requiring the external

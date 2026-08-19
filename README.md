@@ -6,9 +6,11 @@ This module adds post-quantum ML-DSA digital signature support to jwx, enabling 
 
 ## Status
 
-**Deprecated on Go 1.27 and later.** Go 1.27 ships `crypto/mldsa`, and jwx implements ML-DSA natively from that version on, so this module is only needed on Go 1.26.
+**Deprecated once you are on Go 1.27 and jwx v4.4.0.** Go 1.27 ships `crypto/mldsa`, and jwx implements ML-DSA natively from **v4.4.0** on, so this module is only needed below one of those two versions.
 
-On Go 1.27 with a jwx release that has native ML-DSA, this module's `init()` detects the existing registration and stands down, so importing it is harmless but does nothing. To migrate:
+Both conditions must hold. jwx v4.3.0 and earlier register no ML-DSA at all, whatever the toolchain, and jwx v4.4.0 built with Go 1.26 does the same, because its ML-DSA files are `//go:build go1.27`. This module remains the way to get ML-DSA in either case.
+
+When both do hold, this module's `init()` detects the existing registration and stands down, so importing it is harmless but does nothing. To migrate:
 
 - Drop the `github.com/jwx-go/mldsa/v4` import.
 - Replace `filippo.io/mldsa` with `crypto/mldsa`.

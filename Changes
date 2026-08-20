@@ -1,6 +1,26 @@
 Changes
 =======
 
+v4.0.5 20 August 2026
+  * Keep working when jwx implements ML-DSA itself. From
+    `github.com/lestrrat-go/jwx/v4` v4.4.0 on, jwx registers ML-DSA natively
+    when built with Go 1.27 or later. This module now detects that and
+    bridges `filippo.io/mldsa` keys onto jwx's implementation instead of
+    registering the algorithms a second time. Earlier releases panic at
+    import on that combination, because the duplicate registration is
+    rejected.
+
+    Raw `filippo.io/mldsa` keys keep working through `jws.Sign`,
+    `jws.Verify` and `jwk.Import`. `jwk.Export` prefers `crypto/mldsa`: an
+    untyped `jwk.Export[any]` now yields a `crypto/mldsa` key, and only
+    naming the filippo type explicitly yields a filippo key.
+
+    Nothing changes on Go 1.26, or against jwx v4.3.0 and earlier, where
+    this module remains the only ML-DSA implementation.
+  * The package is now marked deprecated. Go 1.27 ships `crypto/mldsa` and
+    jwx uses it directly, so this bridge has nothing left to implement once
+    Go 1.26 support is dropped.
+
 v4.0.4 24 July 2026
   * Bump `github.com/lestrrat-go/jwx/v4` to v4.2.0.
 

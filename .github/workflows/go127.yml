@@ -1,0 +1,78 @@
+name: Go 1.27
+on:
+  pull_request:
+    branches:
+      - develop/v*
+  push:
+    branches:
+      - develop/v*
+
+# Go 1.27 ships crypto/mldsa and encoding/json/v2, so GOEXPERIMENT stays unset
+# here. Naming an experiment the toolchain already ships rebuilds the standard
+# library under a non-default configuration for no benefit.
+#
+# Both jobs pass JWX_MLDSA_EXPECT_INTEROP, which makes
+# TestInteropModeMatchesExpectation fail if the job landed in the other mode.
+# Without it a misconfigured job would go green having skipped everything the
+# job exists to cover.
+
+env:
+  # jwx implements ML-DSA natively from v4.4.0 on, and that release does not
+  # exist yet, so the interop job pins a build of develop/v4 instead. Bump this
+  # by hand when interop needs a newer jwx; `go get <module>@develop/v4` cannot
+  # replace it, because Go rejects a version string containing a slash.
+  #
+  # Delete this and give the two jobs the same go.mod once v4.4.0 ships. The
+  # toolchain alone selects the mode from then on.
+  JWX_DEVELOP_VERSION: "v4.3.1-0.20260820031344-741ca1c0cfb9"
+
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    name: "Test (standalone)"
+    # The released jwx registers no ML-DSA, so this package still owns the
+    # algorithms even on a toolchain that has crypto/mldsa.
+    env:
+      JWX_MLDSA_EXPECT_INTEROP: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go127-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go127-
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - name: Test
+        run: go test -v -race ./...
+
+  interop:
+    runs-on: ubuntu-latest
+    name: "Test (interop)"
+    # The upgrade below only ever happens in CI; go.mod keeps requiring the
+    # released jwx so that consumers never inherit an unreleased dependency.
+    env:
+      JWX_MLDSA_EXPECT_INTEROP: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go127-interop-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go127-interop-
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - name: Upgrade to a jwx build that provides ML-DSA
+        run: go get github.com/lestrrat-go/jwx/v4@${{ env.JWX_DEVELOP_VERSION }}
+      - name: Test
+        run: go test -v -race ./...

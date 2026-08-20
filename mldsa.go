@@ -5,13 +5,18 @@
 // ML-DSA key types and signing/verification in JWK, JWS, and JWT workflows.
 //
 // Deprecated: Go 1.27 ships crypto/mldsa, and jwx implements ML-DSA natively
-// from v4.4.0 on. Building with Go 1.27 and jwx v4.4.0 or later makes this
-// package redundant: init detects the existing registration and stands down,
-// so the import is harmless but pointless. Drop it, replace [filippo.io/mldsa]
-// with crypto/mldsa, and use jwa.MLDSA44, jwa.MLDSA65, and jwa.MLDSA87 in
-// place of this package's accessors. Raw *mldsa.PrivateKey and
-// *mldsa.PublicKey values must come from crypto/mldsa in that setup — jwx's
-// signer does not accept filippo.io/mldsa key types.
+// from v4.4.0 on. Building with Go 1.27 and jwx v4.4.0 or later leaves nothing
+// for this package to implement. Drop it, replace [filippo.io/mldsa] with
+// crypto/mldsa, and use jwa.MLDSA44, jwa.MLDSA65, and jwa.MLDSA87 in place of
+// this package's accessors.
+//
+// Until that migration happens, keeping the import costs nothing. init detects
+// jwx's registration and switches to interop mode, where this package
+// implements no ML-DSA of its own and instead converts [filippo.io/mldsa] keys
+// to crypto/mldsa so that jwx handles them. Both key libraries work through
+// jwk, jws, and jwt in that mode, and signatures made under one verify under
+// the other. See [InteropMode] for the details and for the one limit:
+// jwsbb and dsig accept crypto/mldsa keys only.
 //
 // Both versions matter. jwx v4.3.0 and earlier register no ML-DSA on any
 // toolchain, and jwx v4.4.0 built with Go 1.26 does the same, because its
@@ -101,8 +106,33 @@ func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 	}
 }
 
+// interop records whether init() took the interop path, so that
+// [InteropMode] can report it and so that tests can tell the two shapes
+// apart.
+var interop bool
+
+// InteropMode reports whether this package is bridging filippo.io/mldsa key
+// types onto an ML-DSA implementation that jwx already provides, instead of
+// implementing ML-DSA itself.
+//
+// It is true when jwx registered ML-DSA before this package's init() ran,
+// which happens from jwx v4.4.0 on when built with Go 1.27 or later. In that
+// mode this package performs no ML-DSA operations of its own: it converts
+// filippo.io/mldsa keys to crypto/mldsa and hands them to jwx. The
+// conversion is confined to the jwk and jws layers, so jwsbb and dsig accept
+// crypto/mldsa keys only.
+//
+// It is false in the ordinary case where this package owns the algorithms
+// outright, which covers jwx v4.3.0 and earlier on any toolchain, and any jwx
+// built with Go 1.26. It is also false in the one corner where a third party
+// registered ML-DSA on a pre-1.27 toolchain, since there is no crypto/mldsa
+// to convert to there and this package registers nothing at all.
+func InteropMode() bool {
+	return interop
+}
+
 func init() {
-	// Stand down when ML-DSA is already registered. From Go 1.27 on, jwx
+	// Hand over when ML-DSA is already registered. From Go 1.27 on, jwx
 	// implements ML-DSA itself on top of crypto/mldsa, and registering these
 	// names a second time would fail — dsig rejects a duplicate algorithm
 	// name, which this package turns into an import-time panic. Yielding is
@@ -110,10 +140,15 @@ func init() {
 	// the algorithm name, so whoever registered first owns the behavior, and
 	// jwx's own implementation is the one its key types are built for.
 	//
+	// Yielding the algorithms does not mean yielding the key types. filippo
+	// keys are still accepted through jwk and jws, by converting them to
+	// crypto/mldsa; registerInterop installs that bridge.
+	//
 	// The probe is on dsig rather than on the Go version so that this works
 	// against any jwx release: an older jwx on Go 1.27 registers nothing, and
 	// this package still provides ML-DSA as it always has.
 	if _, ok := dsig.GetAlgorithmInfo(algMLDSA44); ok {
+		interop = registerInterop()
 		return
 	}
 

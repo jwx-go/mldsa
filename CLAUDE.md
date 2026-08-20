@@ -10,6 +10,8 @@ ML-DSA is a post-quantum digital signature scheme. This module bridges the `fili
 
 The `AKP` (Algorithm Key Pair) `jwk.Key` type is provided by the jwx main module itself. This companion only plugs ML-DSA into jwx's extension points: it registers the ML-DSA signature algorithms, raw-key importers/exporters, and `jws.Signer`/`jws.Verifier` implementations. ML-DSA algorithms are registered with `dsig` as Custom family algorithms and mapped through `jwsbb`. The signer/verifier unwrap the AKP JWK key and delegate to `jwsbb.Sign`/`jwsbb.Verify`, which dispatches through `dsig`.
 
+That describes standalone mode. When jwx provides ML-DSA itself, this module registers a narrower set instead — see "Interop mode on native ML-DSA" below.
+
 ### JWK Key Type: AKP (Algorithm Key Pair)
 
 AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-dilithium/draft-ietf-cose-dilithium.html) and is defined in jwx's main `jwk` package — this module does not re-implement it:
@@ -20,19 +22,38 @@ AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cos
 - `priv`: base64url-encoded 32-byte seed (private keys only)
 - Thumbprint fields: `alg`, `kty`, `pub` in lexicographic order
 
-### Stand-down on native ML-DSA
+### Interop mode on native ML-DSA
 
-`init()` first probes `dsig.GetAlgorithmInfo("ML-DSA-44")` and returns early if it hits. jwx implements ML-DSA natively from **v4.4.0** on, when built with **Go 1.27** or later, where `crypto/mldsa` is in the standard library. Re-registering the same names would make `dsig.RegisterAlgorithm` fail and this package panic at import.
+`init()` first probes `dsig.GetAlgorithmInfo("ML-DSA-44")`. A hit means jwx already registered ML-DSA, which happens from **v4.4.0** on when built with **Go 1.27** or later, where `crypto/mldsa` is in the standard library. Re-registering the same names would make `dsig.RegisterAlgorithm` fail and this package panic at import, so the algorithms are left to jwx.
 
-Both versions are required, so there are three cases where this module still does the work: jwx v4.3.0 or earlier on any toolchain, jwx v4.4.0 or later on Go 1.26 (its ML-DSA files are `//go:build go1.27`), and any jwx on Go 1.26.
+The key types are not. On a hit, `registerInterop` (in `interop_go127.go`) installs a bridge that converts `filippo.io/mldsa` keys to `crypto/mldsa` and delegates to jwx. `InteropMode()` reports whether that path was taken.
+
+Both versions are required, so there are three cases where this module implements ML-DSA itself: jwx v4.3.0 or earlier on any toolchain, jwx v4.4.0 or later on Go 1.26 (its ML-DSA files are `//go:build go1.27`), and any jwx on Go 1.26.
 
 The probe is on `dsig` rather than on the Go version or the jwx version deliberately. It reports what is actually registered, so no version table has to be kept in sync here, and the module stays correct against jwx releases that did not exist when it was written.
 
-When the module stands down, none of its registrations happen — including the `filippo.io/mldsa` key importers. Raw keys must then come from `crypto/mldsa`.
+#### What interop mode registers
+
+Interop touches nothing that `dsig` owns, because `dsig` rejects a duplicate algorithm name. It registers only where dispatch is by Go type or by algorithm object:
+
+| JWX Package | Registration | Interop behavior |
+|-------------|--------------|------------------|
+| `jwk` | `RegisterKeyImporter()` | Added for the `filippo.io/mldsa` types; jwx registered the `crypto/mldsa` types, and importers are keyed by Go type, so there is no collision. |
+| `jwk` | `RegisterKeyExporter()` | Tried before jwx's, and returns `ContinueError()` for every hint that is not an explicit `filippo.io/mldsa` type. |
+| `jws` | `RegisterSigner()` / `RegisterVerifier()` | Overrides jwx's pair (`signerDB.Store` is last-write-wins), converts a filippo key, and delegates. |
+
+Two rules follow:
+
+- **`crypto/mldsa` always wins.** `jwk.Export[any]` passes a nil hint, which the interop exporter declines, so the untyped export yields a `crypto/mldsa` key. Only `jwk.Export[*mldsa.PrivateKey]` naming the filippo type yields a filippo key.
+- **Interop stops below `jws`.** `jwsbb.Sign`, `jwsbb.Verify`, and the `dsig` layer are `crypto/mldsa`-only, since they dispatch on the algorithm name alone and `dsig` v1.4.0 owns those names.
+
+Capturing jwx's signer via `jws.SignerFor` **before** calling `jws.RegisterSigner` is mandatory. Looking it up afterwards returns the interop wrapper, and the delegation recurses until the stack runs out.
+
+Conversion is exact in both directions for all three parameter sets, because both libraries encode a private key as the FIPS 204 seed. It costs one key expansion per operation, roughly 208µs against 466µs to sign, and it is paid only by a caller still passing a raw filippo key.
 
 ### Registration Points
 
-All registrations happen in `mldsa.go`'s `init()`, and only when the stand-down probe above does not fire. Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
+The table below lists standalone mode, which `mldsa.go`'s `init()` installs when the `dsig` probe above misses. Interop mode registers a subset, listed in "What interop mode registers". Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
 
 | JWX Package | Registration Function | Purpose |
 |-------------|----------------------|---------|
@@ -51,20 +72,47 @@ This module depends on `filippo.io/mldsa` for the underlying ML-DSA implementati
 
 ## Build / Test
 
-Requires `GOEXPERIMENT=jsonv2` (jwx v4 dependency):
+On Go 1.26, `GOEXPERIMENT=jsonv2` is required (jwx v4 dependency). On Go 1.27 it must NOT be set, because that toolchain already ships `encoding/json/v2`.
 
 ```
-GOEXPERIMENT=jsonv2 go test ./...
+GOEXPERIMENT=jsonv2 go test ./...   # Go 1.26
+go test ./...                       # Go 1.27
 ```
+
+Either command exercises standalone mode, since the released jwx registers no ML-DSA. Interop mode needs jwx v4.4.0 or later, so until that ships it takes an upgrade to a build of jwx's `develop/v4`:
+
+```
+go get github.com/lestrrat-go/jwx/v4@<pseudo-version>
+go test ./...
+```
+
+`go get <module>@develop/v4` does not work, because Go rejects a version string containing a slash. CI carries the pseudo-version in `JWX_DEVELOP_VERSION` in `go127.yml` and must be bumped by hand; a local `go.work` pointing at a jwx checkout does the same job while iterating.
+
+Set `JWX_MLDSA_EXPECT_INTEROP` to `1` or `0` to assert which mode the run landed in. `TestInteropModeMatchesExpectation` then fails on a mismatch. Without it, a run in the wrong mode goes green having skipped every test that mode-specific coverage lives in.
+
+### Workflows
+
+| Workflow | Toolchain | Mode |
+|----------|-----------|------|
+| `ci.yml` | `go.mod` (Go 1.26), `GOEXPERIMENT=jsonv2` | Standalone |
+| `go127.yml` job `standalone` | Go 1.27, released jwx | Standalone |
+| `go127.yml` job `interop` | Go 1.27, jwx pinned to `JWX_DEVELOP_VERSION` | Interop |
+
+The interop job upgrades jwx at run time only. `go.mod` keeps requiring the released version, so consumers never inherit an unreleased dependency.
+
+`ci.yml` is synced from the shared companion template, so Go 1.27 coverage lives in `go127.yml` instead of being added there. Once jwx v4.4.0 is released and `go.mod` can require it directly, drop `JWX_DEVELOP_VERSION` and the upgrade step, and fold the jobs into a plain toolchain matrix — the Go version alone selects the mode from then on.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `mldsa.go` | Package doc, algorithm constants, `init()` registration, raw-key importers/exporter, `dsig` algorithm adapter |
+| `mldsa.go` | Package doc, algorithm constants, `init()` registration, `InteropMode()`, raw-key importers/exporter, `dsig` algorithm adapter |
 | `signer.go` | `mldsaSigner` implementing `jws.Signer` |
 | `verifier.go` | `mldsaVerifier` implementing `jws.Verifier` |
+| `interop_go127.go` | Interop-mode registration and the `filippo.io/mldsa` to `crypto/mldsa` conversion (`//go:build go1.27`) |
+| `interop_pre_go127.go` | Interop-mode stub for Go 1.26, where there is no `crypto/mldsa` to convert to |
 | `mldsa_test.go` | Tests |
+| `interop_go127_test.go` | Interop-mode tests, skipped unless jwx provides ML-DSA natively |
 
 ## Branch Policy
 

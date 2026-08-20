@@ -10,13 +10,17 @@ This module adds post-quantum ML-DSA digital signature support to jwx, enabling 
 
 Both conditions must hold. jwx v4.3.0 and earlier register no ML-DSA at all, whatever the toolchain, and jwx v4.4.0 built with Go 1.26 does the same, because its ML-DSA files are `//go:build go1.27`. This module remains the way to get ML-DSA in either case.
 
-When both do hold, this module's `init()` detects the existing registration and stands down, so importing it is harmless but does nothing. To migrate:
+To migrate when both do hold:
 
 - Drop the `github.com/jwx-go/mldsa/v4` import.
 - Replace `filippo.io/mldsa` with `crypto/mldsa`.
 - Use `jwa.MLDSA44()`, `jwa.MLDSA65()`, `jwa.MLDSA87()` in place of this package's accessors.
 
-Raw keys must come from `crypto/mldsa` in that setup: jwx's own signer does not accept `filippo.io/mldsa` key types. Keys held as JWKs need no change. This module stays supported for as long as jwx supports Go 1.26.
+Until you migrate, keeping the import costs nothing. `init()` detects jwx's registration and switches to **interop mode**, where this module implements no ML-DSA of its own and instead converts `filippo.io/mldsa` keys to `crypto/mldsa` so jwx handles them. Both key libraries then work through `jwk`, `jws`, and `jwt`, and a signature made under one verifies under the other. `InteropMode()` reports whether that path was taken.
+
+Two things change in interop mode. `jwsbb` and `dsig` accept `crypto/mldsa` keys only, because they dispatch on the algorithm name and jwx owns those names there. `jwk.Export[any]` returns a `crypto/mldsa` key, so ask for `jwk.Export[*mldsa.PrivateKey]` when you specifically want a `filippo.io/mldsa` one.
+
+Keys held as JWKs need no change either way. This module stays supported for as long as jwx supports Go 1.26.
 
 ## Installation
 

@@ -79,14 +79,7 @@ GOEXPERIMENT=jsonv2 go test ./...   # Go 1.26
 go test ./...                       # Go 1.27
 ```
 
-Either command exercises standalone mode, since the released jwx registers no ML-DSA. Interop mode needs jwx v4.4.0 or later, so until that ships it takes an upgrade to a build of jwx's `develop/v4`:
-
-```
-go get github.com/lestrrat-go/jwx/v4@<pseudo-version>
-go test ./...
-```
-
-`go get <module>@develop/v4` does not work, because Go rejects a version string containing a slash. CI carries the pseudo-version in `JWX_DEVELOP_VERSION` in `go127.yml` and must be bumped by hand; a local `go.work` pointing at a jwx checkout does the same job while iterating.
+The toolchain selects the mode on its own. `go.mod` requires jwx v4.4.0 or later, whose ML-DSA files are `//go:build go1.27`, so the Go 1.26 command above exercises standalone mode and the Go 1.27 one exercises interop mode. Neither needs a `go get` first.
 
 Set `JWX_MLDSA_EXPECT_INTEROP` to `1` or `0` to assert which mode the run landed in. `TestInteropModeMatchesExpectation` then fails on a mismatch. Without it, a run in the wrong mode goes green having skipped every test that mode-specific coverage lives in.
 
@@ -95,12 +88,13 @@ Set `JWX_MLDSA_EXPECT_INTEROP` to `1` or `0` to assert which mode the run landed
 | Workflow | Toolchain | Mode |
 |----------|-----------|------|
 | `ci.yml` | `go.mod` (Go 1.26), `GOEXPERIMENT=jsonv2` | Standalone |
-| `go127.yml` job `standalone` | Go 1.27, released jwx | Standalone |
-| `go127.yml` job `interop` | Go 1.27, jwx pinned to `JWX_DEVELOP_VERSION` | Interop |
+| `go127.yml` job `interop` | Go 1.27 | Interop |
 
-The interop job upgrades jwx at run time only. `go.mod` keeps requiring the released version, so consumers never inherit an unreleased dependency.
+`ci.yml` is synced from the shared companion template, so Go 1.27 coverage lives in `go127.yml` instead of being added there.
 
-`ci.yml` is synced from the shared companion template, so Go 1.27 coverage lives in `go127.yml` instead of being added there. Once jwx v4.4.0 is released and `go.mod` can require it directly, drop `JWX_DEVELOP_VERSION` and the upgrade step, and fold the jobs into a plain toolchain matrix — the Go version alone selects the mode from then on.
+There is no job covering standalone mode on Go 1.27, because no supported configuration produces it: that needs jwx v4.3.0 or earlier, which `go.mod` no longer allows.
+
+**Releasing a jwx version that changes which mode a toolchain lands in means updating `go127.yml` in the same change.** The `JWX_MLDSA_EXPECT_INTEROP` assertions are pinned to the modes above, so a jwx bump that moves a toolchain across the boundary turns this repo's default branch red until the workflow follows. That is what happened when jwx v4.4.0 shipped.
 
 ## Files
 

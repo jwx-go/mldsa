@@ -70,11 +70,31 @@ This module depends on `filippo.io/mldsa` for the underlying ML-DSA implementati
 
 ## Build / Test
 
-Requires `GOEXPERIMENT=jsonv2` (jwx v4 dependency):
+On Go 1.26, `GOEXPERIMENT=jsonv2` is required (jwx v4 dependency). On Go 1.27 it must NOT be set, because that toolchain already ships `encoding/json/v2`.
 
 ```
-GOEXPERIMENT=jsonv2 go test ./...
+GOEXPERIMENT=jsonv2 go test ./...   # Go 1.26
+go test ./...                       # Go 1.27
 ```
+
+Either command exercises standalone mode, since the released jwx registers no ML-DSA. Interop mode needs jwx v4.4.0 or later, so until that ships the only way to reach it is a `go.work` pointing at jwx's `develop/v4`:
+
+```
+printf 'go 1.27.0\n\nuse (\n\t.\n\t/path/to/jwx\n)\n' > go.work
+go test ./...
+```
+
+Set `JWX_MLDSA_EXPECT_INTEROP` to `1` or `0` to assert which mode the run landed in. `TestInteropModeMatchesExpectation` then fails on a mismatch. Without it, a run in the wrong mode goes green having skipped every test that mode-specific coverage lives in.
+
+### Workflows
+
+| Workflow | Toolchain | Mode |
+|----------|-----------|------|
+| `ci.yml` | `go.mod` (Go 1.26), `GOEXPERIMENT=jsonv2` | Standalone |
+| `go127.yml` job `standalone` | Go 1.27, released jwx | Standalone |
+| `go127.yml` job `interop` | Go 1.27, jwx `develop/v4` via `go.work` | Interop |
+
+`ci.yml` is synced from the shared companion template, so Go 1.27 coverage lives in `go127.yml` instead of being added there. Fold the two together once jwx v4.4.0 is released and `go.mod` can require it directly.
 
 ## Files
 

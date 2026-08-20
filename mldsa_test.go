@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"encoding/base64"
 	"encoding/json"
+	"os"
 	"testing"
 
 	"filippo.io/mldsa"
@@ -23,6 +24,20 @@ const (
 	algMLDSA65 = "ML-DSA-65"
 	algMLDSA87 = "ML-DSA-87"
 )
+
+// TestInteropModeMatchesExpectation guards the CI jobs. Both interop and
+// standalone tests skip themselves when the other mode is active, so a job
+// that silently lands in the wrong mode would report a green run having
+// exercised nothing. Setting JWX_MLDSA_EXPECT_INTEROP to 1 or 0 makes that
+// job fail instead.
+func TestInteropModeMatchesExpectation(t *testing.T) {
+	want, ok := os.LookupEnv("JWX_MLDSA_EXPECT_INTEROP")
+	if !ok {
+		t.Skip("JWX_MLDSA_EXPECT_INTEROP is not set")
+	}
+	require.Contains(t, []string{"0", "1"}, want, "JWX_MLDSA_EXPECT_INTEROP must be 0 or 1")
+	require.Equal(t, want == "1", jwxmldsa.InteropMode())
+}
 
 // skipWhenInterop skips a test that drives the jwsbb or dsig layer with a
 // filippo.io/mldsa key. Interop mode leaves those layers to jwx's

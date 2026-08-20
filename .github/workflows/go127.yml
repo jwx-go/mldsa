@@ -1,0 +1,87 @@
+name: Go 1.27
+on:
+  pull_request:
+    branches:
+      - develop/v*
+  push:
+    branches:
+      - develop/v*
+
+# Go 1.27 ships crypto/mldsa and encoding/json/v2, so GOEXPERIMENT stays unset
+# here. Naming an experiment the toolchain already ships rebuilds the standard
+# library under a non-default configuration for no benefit.
+#
+# Both jobs pass JWX_MLDSA_EXPECT_INTEROP, which makes
+# TestInteropModeMatchesExpectation fail if the job landed in the other mode.
+# Without it a misconfigured job would go green having skipped everything the
+# job exists to cover.
+
+jobs:
+  standalone:
+    runs-on: ubuntu-latest
+    name: "Test (standalone)"
+    # The released jwx registers no ML-DSA, so this package still owns the
+    # algorithms even on a toolchain that has crypto/mldsa.
+    env:
+      JWX_MLDSA_EXPECT_INTEROP: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go127-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go127-
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - name: Test
+        run: go test -v -race ./...
+
+  interop:
+    runs-on: ubuntu-latest
+    name: "Test (interop)"
+    # jwx implements ML-DSA natively from v4.4.0 on. Until that is released,
+    # the only way to exercise interop mode is against jwx's development
+    # branch, wired in through a go.work so that go.mod stays on the released
+    # version.
+    env:
+      JWX_MLDSA_EXPECT_INTEROP: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: mldsa
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lestrrat-go/jwx
+          ref: develop/v4
+          path: jwx
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go127-interop-${{ hashFiles('mldsa/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go127-interop-
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - name: Redirect jwx to its development branch
+        working-directory: mldsa
+        run: |
+          cat > go.work <<'GOWORK'
+          go 1.27.0
+
+          use (
+          	.
+          	../jwx
+          )
+          GOWORK
+      - name: Test
+        working-directory: mldsa
+        run: go test -v -race ./...

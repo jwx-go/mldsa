@@ -71,10 +71,10 @@ func TestInteropStdlibKeyThroughJWS(t *testing.T) {
 	sk, err := stdmldsa.GenerateKey(stdmldsa.MLDSA65())
 	require.NoError(t, err)
 
-	signed, err := jws.Sign([]byte("payload"), jws.WithKey(jwa.MLDSA65(), sk))
+	signed, err := jws.Sign([]byte("payload"), jws.WithKey(jwxmldsa.MLDSA65(), sk))
 	require.NoError(t, err)
 
-	got, err := jws.Verify(signed, jws.WithKey(jwa.MLDSA65(), sk.PublicKey()))
+	got, err := jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA65(), sk.PublicKey()))
 	require.NoError(t, err)
 	require.Equal(t, []byte("payload"), got)
 }
@@ -91,14 +91,14 @@ func TestInteropCrossBackendSignatures(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, fsk.PublicKey().Bytes(), ssk.PublicKey().Bytes())
 
-	byFilippo, err := jws.Sign([]byte("payload"), jws.WithKey(jwa.MLDSA65(), fsk))
+	byFilippo, err := jws.Sign([]byte("payload"), jws.WithKey(jwxmldsa.MLDSA65(), fsk))
 	require.NoError(t, err)
-	_, err = jws.Verify(byFilippo, jws.WithKey(jwa.MLDSA65(), ssk.PublicKey()))
+	_, err = jws.Verify(byFilippo, jws.WithKey(jwxmldsa.MLDSA65(), ssk.PublicKey()))
 	require.NoError(t, err)
 
-	byStdlib, err := jws.Sign([]byte("payload"), jws.WithKey(jwa.MLDSA65(), ssk))
+	byStdlib, err := jws.Sign([]byte("payload"), jws.WithKey(jwxmldsa.MLDSA65(), ssk))
 	require.NoError(t, err)
-	_, err = jws.Verify(byStdlib, jws.WithKey(jwa.MLDSA65(), fsk.PublicKey()))
+	_, err = jws.Verify(byStdlib, jws.WithKey(jwxmldsa.MLDSA65(), fsk.PublicKey()))
 	require.NoError(t, err)
 }
 
@@ -115,12 +115,12 @@ func TestInteropImportFilippoKey(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, jwa.AKP(), key.KeyType())
 
-		signed, err := jws.Sign([]byte("payload"), jws.WithKey(jwa.MLDSA44(), key))
+		signed, err := jws.Sign([]byte("payload"), jws.WithKey(jwxmldsa.MLDSA44(), key))
 		require.NoError(t, err)
 
 		pub, err := key.PublicKey()
 		require.NoError(t, err)
-		_, err = jws.Verify(signed, jws.WithKey(jwa.MLDSA44(), pub))
+		_, err = jws.Verify(signed, jws.WithKey(jwxmldsa.MLDSA44(), pub))
 		require.NoError(t, err)
 	})
 
@@ -211,8 +211,8 @@ func TestInteropRejectsParamSetConfusion(t *testing.T) {
 		routeAlg jwa.SignatureAlgorithm
 		keyGen   *mldsa.Parameters
 	}{
-		{"ML-DSA-65-as-ML-DSA-44", jwa.MLDSA44(), mldsa.MLDSA65()},
-		{"ML-DSA-44-as-ML-DSA-87", jwa.MLDSA87(), mldsa.MLDSA44()},
+		{"ML-DSA-65-as-ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA65()},
+		{"ML-DSA-44-as-ML-DSA-87", jwxmldsa.MLDSA87(), mldsa.MLDSA44()},
 	}
 
 	for _, tc := range cases {

@@ -16,6 +16,16 @@ on:
 # Without it a misconfigured job would go green having skipped everything the
 # job exists to cover.
 
+env:
+  # jwx implements ML-DSA natively from v4.4.0 on, and that release does not
+  # exist yet, so the interop job pins a build of develop/v4 instead. Bump this
+  # by hand when interop needs a newer jwx; `go get <module>@develop/v4` cannot
+  # replace it, because Go rejects a version string containing a slash.
+  #
+  # Delete this and give the two jobs the same go.mod once v4.4.0 ships. The
+  # toolchain alone selects the mode from then on.
+  JWX_DEVELOP_VERSION: "v4.3.1-0.20260820031344-741ca1c0cfb9"
+
 jobs:
   standalone:
     runs-on: ubuntu-latest
@@ -44,44 +54,25 @@ jobs:
   interop:
     runs-on: ubuntu-latest
     name: "Test (interop)"
-    # jwx implements ML-DSA natively from v4.4.0 on. Until that is released,
-    # the only way to exercise interop mode is against jwx's development
-    # branch, wired in through a go.work so that go.mod stays on the released
-    # version.
+    # The upgrade below only ever happens in CI; go.mod keeps requiring the
+    # released jwx so that consumers never inherit an unreleased dependency.
     env:
       JWX_MLDSA_EXPECT_INTEROP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: mldsa
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: lestrrat-go/jwx
-          ref: develop/v4
-          path: jwx
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go127-interop-${{ hashFiles('mldsa/go.sum') }}
+          key: ${{ runner.os }}-go127-interop-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go127-interop-
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.x"
           check-latest: true
-      - name: Redirect jwx to its development branch
-        working-directory: mldsa
-        run: |
-          cat > go.work <<'GOWORK'
-          go 1.27.0
-
-          use (
-          	.
-          	../jwx
-          )
-          GOWORK
+      - name: Upgrade to a jwx build that provides ML-DSA
+        run: go get github.com/lestrrat-go/jwx/v4@${{ env.JWX_DEVELOP_VERSION }}
       - name: Test
-        working-directory: mldsa
         run: go test -v -race ./...

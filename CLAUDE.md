@@ -10,6 +10,8 @@ ML-DSA is a post-quantum digital signature scheme. This module bridges the `fili
 
 The `AKP` (Algorithm Key Pair) `jwk.Key` type is provided by the jwx main module itself. This companion only plugs ML-DSA into jwx's extension points: it registers the ML-DSA signature algorithms, raw-key importers/exporters, and `jws.Signer`/`jws.Verifier` implementations. ML-DSA algorithms are registered with `dsig` as Custom family algorithms and mapped through `jwsbb`. The signer/verifier unwrap the AKP JWK key and delegate to `jwsbb.Sign`/`jwsbb.Verify`, which dispatches through `dsig`.
 
+That describes standalone mode. When jwx provides ML-DSA itself, this module registers a narrower set instead — see "Interop mode on native ML-DSA" below.
+
 ### JWK Key Type: AKP (Algorithm Key Pair)
 
 AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cose-dilithium/draft-ietf-cose-dilithium.html) and is defined in jwx's main `jwk` package — this module does not re-implement it:
@@ -51,7 +53,7 @@ Conversion is exact in both directions for all three parameter sets, because bot
 
 ### Registration Points
 
-All registrations happen in `mldsa.go`'s `init()`, and only when the stand-down probe above does not fire. Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
+The table below lists standalone mode, which `mldsa.go`'s `init()` installs when the `dsig` probe above misses. Interop mode registers a subset, listed in "What interop mode registers". Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
 
 | JWX Package | Registration Function | Purpose |
 |-------------|----------------------|---------|
@@ -77,12 +79,14 @@ GOEXPERIMENT=jsonv2 go test ./...   # Go 1.26
 go test ./...                       # Go 1.27
 ```
 
-Either command exercises standalone mode, since the released jwx registers no ML-DSA. Interop mode needs jwx v4.4.0 or later, so until that ships the only way to reach it is a `go.work` pointing at jwx's `develop/v4`:
+Either command exercises standalone mode, since the released jwx registers no ML-DSA. Interop mode needs jwx v4.4.0 or later, so until that ships it takes an upgrade to a build of jwx's `develop/v4`:
 
 ```
-printf 'go 1.27.0\n\nuse (\n\t.\n\t/path/to/jwx\n)\n' > go.work
+go get github.com/lestrrat-go/jwx/v4@<pseudo-version>
 go test ./...
 ```
+
+`go get <module>@develop/v4` does not work, because Go rejects a version string containing a slash. CI carries the pseudo-version in `JWX_DEVELOP_VERSION` in `go127.yml` and must be bumped by hand; a local `go.work` pointing at a jwx checkout does the same job while iterating.
 
 Set `JWX_MLDSA_EXPECT_INTEROP` to `1` or `0` to assert which mode the run landed in. `TestInteropModeMatchesExpectation` then fails on a mismatch. Without it, a run in the wrong mode goes green having skipped every test that mode-specific coverage lives in.
 
@@ -92,9 +96,11 @@ Set `JWX_MLDSA_EXPECT_INTEROP` to `1` or `0` to assert which mode the run landed
 |----------|-----------|------|
 | `ci.yml` | `go.mod` (Go 1.26), `GOEXPERIMENT=jsonv2` | Standalone |
 | `go127.yml` job `standalone` | Go 1.27, released jwx | Standalone |
-| `go127.yml` job `interop` | Go 1.27, jwx `develop/v4` via `go.work` | Interop |
+| `go127.yml` job `interop` | Go 1.27, jwx pinned to `JWX_DEVELOP_VERSION` | Interop |
 
-`ci.yml` is synced from the shared companion template, so Go 1.27 coverage lives in `go127.yml` instead of being added there. Fold the two together once jwx v4.4.0 is released and `go.mod` can require it directly.
+The interop job upgrades jwx at run time only. `go.mod` keeps requiring the released version, so consumers never inherit an unreleased dependency.
+
+`ci.yml` is synced from the shared companion template, so Go 1.27 coverage lives in `go127.yml` instead of being added there. Once jwx v4.4.0 is released and `go.mod` can require it directly, drop `JWX_DEVELOP_VERSION` and the upgrade step, and fold the jobs into a plain toolchain matrix — the Go version alone selects the mode from then on.
 
 ## Files
 

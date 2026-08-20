@@ -24,6 +24,17 @@ const (
 	algMLDSA87 = "ML-DSA-87"
 )
 
+// skipWhenInterop skips a test that drives the jwsbb or dsig layer with a
+// filippo.io/mldsa key. Interop mode leaves those layers to jwx's
+// crypto/mldsa implementation, so filippo keys only reach ML-DSA through jwk
+// and jws there.
+func skipWhenInterop(t *testing.T) {
+	t.Helper()
+	if jwxmldsa.InteropMode() {
+		t.Skip("jwsbb and dsig are crypto/mldsa-only in interop mode")
+	}
+}
+
 func TestAlgorithmConstants(t *testing.T) {
 	t.Parallel()
 
@@ -216,11 +227,11 @@ func TestKeyImportExport(t *testing.T) {
 			privJWK, err := jwk.Import[jwk.Key](sk)
 			require.NoError(t, err)
 
-			// Export private key
-			exported, err := jwk.Export[any](privJWK)
+			// Export private key. The filippo type is named explicitly
+			// because interop mode answers an unqualified jwk.Export[any]
+			// with a crypto/mldsa key.
+			exportedSK, err := jwk.Export[*mldsa.PrivateKey](privJWK)
 			require.NoError(t, err)
-			exportedSK, ok := exported.(*mldsa.PrivateKey)
-			require.True(t, ok)
 			require.True(t, sk.Equal(exportedSK))
 
 			// Import public key
@@ -229,10 +240,8 @@ func TestKeyImportExport(t *testing.T) {
 			require.NoError(t, err)
 
 			// Export public key
-			exported, err = jwk.Export[any](pubJWK)
+			exportedPK, err := jwk.Export[*mldsa.PublicKey](pubJWK)
 			require.NoError(t, err)
-			exportedPK, ok := exported.(*mldsa.PublicKey)
-			require.True(t, ok)
 			require.True(t, pk.Equal(exportedPK))
 		})
 	}
@@ -365,6 +374,7 @@ func TestParamSetConfusionAttack(t *testing.T) {
 		})
 
 		t.Run("jwsbb.Sign/"+tc.name, func(t *testing.T) {
+			skipWhenInterop(t)
 			t.Parallel()
 			sk, err := mldsa.GenerateKey(tc.keyGen)
 			require.NoError(t, err)
@@ -422,6 +432,7 @@ func TestParamSetConfusionAttack(t *testing.T) {
 		})
 
 		t.Run("jwsbb.Verify/"+tc.name, func(t *testing.T) {
+			skipWhenInterop(t)
 			t.Parallel()
 			sk, err := mldsa.GenerateKey(tc.keyGen)
 			require.NoError(t, err)
@@ -464,6 +475,7 @@ func forgeCompactJWS(t *testing.T, sk *mldsa.PrivateKey, algHeader string, paylo
 // Context field was being honored while the verifier ran with ctx="" —
 // a signature-substitution vector for composite signatures (jwx-go/compsig).
 func TestSignVerifyWithOptsTypeMismatch(t *testing.T) {
+	skipWhenInterop(t)
 	t.Parallel()
 
 	sk, err := mldsa.GenerateKey(mldsa.MLDSA65())

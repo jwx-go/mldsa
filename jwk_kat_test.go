@@ -52,7 +52,7 @@ func TestJWKKnownAnswers(t *testing.T) {
 
 	for _, tc := range []struct {
 		name          string
-		params        *mldsa.Parameters
+		params        mldsa.Parameters
 		expectedPub   string
 		expectedPriv  string
 		expectedThumb string

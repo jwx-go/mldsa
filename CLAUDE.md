@@ -26,15 +26,23 @@ AKP follows [draft-ietf-cose-dilithium](https://cose-wg.github.io/draft-ietf-cos
 
 `init()` first probes `dsig.GetAlgorithmInfo("ML-DSA-44")`. A hit means jwx already registered ML-DSA, which happens from **v4.4.0** on when built with **Go 1.27** or later, where `crypto/mldsa` is in the standard library. Re-registering the same names would make `dsig.RegisterAlgorithm` fail and this package panic at import, so the algorithms are left to jwx.
 
-The key types are not. On a hit, `registerInterop` (in `interop_go127.go`) installs a bridge that converts `filippo.io/mldsa` keys to `crypto/mldsa` and delegates to jwx. `InteropMode()` reports whether that path was taken.
+On a hit, `registerInterop` runs and `InteropMode()` reports `true`. What it registers depends on the build:
+
+| Build | File | `registerInterop` |
+|-------|------|-------------------|
+| Go 1.27, no `fips140v1.0` tag | `interop_alias.go` | Registers nothing. `filippo.io/mldsa` v1 declares its types as aliases of `crypto/mldsa` → jwx's own registrations already accept filippo keys at every layer. Registering importers for them again → `jwk.RegisterKeyImporter` error → import-time panic. |
+| Go 1.27 + `fips140v1.0` | `interop_bridge.go` | Installs a bridge that converts `filippo.io/mldsa` keys to `crypto/mldsa` and delegates to jwx. filippo keeps its own types under this tag (its `mldsa_fips140v1.26.go`). |
+| Go 1.26 | `interop_pre_go127.go` | Registers nothing; no `crypto/mldsa` to convert to. |
+
+NEVER re-add registrations to `interop_alias.go`. The build tags MUST mirror filippo's own split (`go1.27 && !fips140v1.0` = aliases) → re-check them on every `filippo.io/mldsa` bump.
 
 Both versions are required, so there are three cases where this module implements ML-DSA itself: jwx v4.3.0 or earlier on any toolchain, jwx v4.4.0 or later on Go 1.26 (its ML-DSA files are `//go:build go1.27`), and any jwx on Go 1.26.
 
 The probe is on `dsig` rather than on the Go version or the jwx version deliberately. It reports what is actually registered, so no version table has to be kept in sync here, and the module stays correct against jwx releases that did not exist when it was written.
 
-#### What interop mode registers
+#### What the fips140v1.0 bridge registers
 
-Interop touches nothing that `dsig` owns, because `dsig` rejects a duplicate algorithm name. It registers only where dispatch is by Go type or by algorithm object:
+Applies to `interop_bridge.go` only. Interop touches nothing that `dsig` owns, because `dsig` rejects a duplicate algorithm name. It registers only where dispatch is by Go type or by algorithm object:
 
 | JWX Package | Registration | Interop behavior |
 |-------------|--------------|------------------|
@@ -53,7 +61,7 @@ Conversion is exact in both directions for all three parameter sets, because bot
 
 ### Registration Points
 
-The table below lists standalone mode, which `mldsa.go`'s `init()` installs when the `dsig` probe above misses. Interop mode registers a subset, listed in "What interop mode registers". Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
+The table below lists standalone mode, which `mldsa.go`'s `init()` installs when the `dsig` probe above misses. Interop mode registers nothing, or under `fips140v1.0` a subset listed in "What the fips140v1.0 bridge registers". Key type registration, AKP JWK parsing, and the `priv` probe field are handled by jwx itself — this module only adds the ML-DSA-specific bindings below.
 
 | JWX Package | Registration Function | Purpose |
 |-------------|----------------------|---------|
@@ -68,7 +76,14 @@ The table below lists standalone mode, which `mldsa.go`'s `init()` installs when
 
 ### Dependency on filippo.io/mldsa
 
-This module depends on `filippo.io/mldsa` for the underlying ML-DSA implementation. Upstream has published no semver tags; the dependency is pinned to pseudo-version `v0.0.0-20260215214346-43d0283efc3e` (commit `43d0283efc3e`, 2026-02-15). Cryptographic integrity is anchored by the `h1:` hashes in `go.sum` — do not bump without updating both. The pin will be revisited when either (a) filippo.io/mldsa cuts a tagged release, or (b) Go ships `crypto/mldsa` (https://github.com/golang/go/issues/77626), at which point this module migrates to the standard library and may be deprecated entirely. See `mldsa.go` package doc for the bridge rationale.
+This module depends on `filippo.io/mldsa` v1.0.0 for the underlying ML-DSA implementation. Cryptographic integrity is anchored by the `h1:` hashes in `go.sum` — do not bump without updating both.
+
+v1.0.0 changed the API from the earlier untagged pseudo-version pin (`v0.0.0-20260215214346-43d0283efc3e`):
+
+- `MLDSA44/65/87()`, `PublicKey.Parameters()`, and the `GenerateKey`/`NewPrivateKey`/`NewPublicKey` parameter take/return `Parameters` by value, not `*Parameters`. Equal parameter sets compare `==`.
+- On Go 1.27 without `fips140v1.0`, every type is an alias of its `crypto/mldsa` counterpart. See "Interop mode on native ML-DSA".
+
+Downstream `github.com/jwx-go/compsig` also imports `filippo.io/mldsa` and this module → a `filippo.io/mldsa` bump here needs a matching compsig bump.
 
 ## Build / Test
 
@@ -103,7 +118,8 @@ There is no job covering standalone mode on Go 1.27, because no supported config
 | `mldsa.go` | Package doc, algorithm constants, `init()` registration, `InteropMode()`, raw-key importers/exporter, `dsig` algorithm adapter |
 | `signer.go` | `mldsaSigner` implementing `jws.Signer` |
 | `verifier.go` | `mldsaVerifier` implementing `jws.Verifier` |
-| `interop_go127.go` | Interop-mode registration and the `filippo.io/mldsa` to `crypto/mldsa` conversion (`//go:build go1.27`) |
+| `interop_alias.go` | Interop-mode stub for Go 1.27, where filippo types alias `crypto/mldsa` (`//go:build go1.27 && !fips140v1.0`) |
+| `interop_bridge.go` | Interop-mode registration and the `filippo.io/mldsa` to `crypto/mldsa` conversion (`//go:build go1.27 && fips140v1.0`) |
 | `interop_pre_go127.go` | Interop-mode stub for Go 1.26, where there is no `crypto/mldsa` to convert to |
 | `mldsa_test.go` | Tests |
 | `interop_go127_test.go` | Interop-mode tests, skipped unless jwx provides ML-DSA natively |

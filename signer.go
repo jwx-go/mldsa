@@ -12,7 +12,7 @@ import (
 
 type mldsaSigner struct {
 	algName string
-	params  *mldsa.Parameters
+	params  mldsa.Parameters
 }
 
 func (s *mldsaSigner) Sign(key any, payload []byte) ([]byte, error) {
@@ -23,7 +23,7 @@ func (s *mldsaSigner) Sign(key any, payload []byte) ([]byte, error) {
 	return jwsbb.Sign(sk, s.algName, payload, nil)
 }
 
-func extractPrivateKey(key any, params *mldsa.Parameters) (*mldsa.PrivateKey, error) {
+func extractPrivateKey(key any, params mldsa.Parameters) (*mldsa.PrivateKey, error) {
 	switch k := key.(type) {
 	case *mldsa.PrivateKey:
 		if err := requireParamsMatch(k.PublicKey().Parameters(), params); err != nil {

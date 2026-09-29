@@ -89,7 +89,7 @@ func TestSignVerifyRaw(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		alg    jwa.SignatureAlgorithm
-		params *mldsa.Parameters
+		params mldsa.Parameters
 	}{
 		{algMLDSA44, jwxmldsa.MLDSA44(), mldsa.MLDSA44()},
 		{algMLDSA65, jwxmldsa.MLDSA65(), mldsa.MLDSA65()},
@@ -125,7 +125,7 @@ func TestSignVerifyJWK(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		alg    jwa.SignatureAlgorithm
-		params *mldsa.Parameters
+		params mldsa.Parameters
 	}{
 		{algMLDSA44, jwxmldsa.MLDSA44(), mldsa.MLDSA44()},
 		{algMLDSA65, jwxmldsa.MLDSA65(), mldsa.MLDSA65()},
@@ -226,7 +226,7 @@ func TestKeyImportExport(t *testing.T) {
 
 	for _, tc := range []struct {
 		name   string
-		params *mldsa.Parameters
+		params mldsa.Parameters
 	}{
 		{algMLDSA44, mldsa.MLDSA44()},
 		{algMLDSA65, mldsa.MLDSA65()},
@@ -366,7 +366,7 @@ func TestParamSetConfusionAttack(t *testing.T) {
 	cases := []struct {
 		name     string
 		routeAlg jwa.SignatureAlgorithm
-		keyGen   *mldsa.Parameters
+		keyGen   mldsa.Parameters
 	}{
 		{"ML-DSA-65-as-ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA65()},
 		{"ML-DSA-87-as-ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA87()},

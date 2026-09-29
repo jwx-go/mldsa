@@ -1,6 +1,23 @@
 Changes
 =======
 
+v4.0.6 29 September 2026
+  * Require `filippo.io/mldsa` v1.0.0. That release changes its API:
+    `mldsa.MLDSA44()`, `MLDSA65()`, `MLDSA87()` and `PublicKey.Parameters()`
+    return `mldsa.Parameters` by value instead of by pointer, and
+    `GenerateKey`, `NewPrivateKey` and `NewPublicKey` take it by value.
+    Code that calls `filippo.io/mldsa` directly must switch from
+    `*mldsa.Parameters` to `mldsa.Parameters` when it upgrades to this
+    version, because Go selects the newer `filippo.io/mldsa` for the whole
+    build.
+  * On Go 1.27, `filippo.io/mldsa` v1.0.0 declares its key types as aliases
+    of the `crypto/mldsa` types, so a filippo key is a `crypto/mldsa` key.
+    When jwx provides ML-DSA natively, this module now registers nothing and
+    jwx signs, verifies, imports and exports filippo keys directly. Two
+    limits from v4.0.5 no longer apply there: `jwsbb.Sign` and
+    `jwsbb.Verify` accept filippo keys, and `jwk.Export[any]` returns a key
+    that is both types at once.
+
 v4.0.5 20 August 2026
   * Keep working when jwx implements ML-DSA itself. From
     `github.com/lestrrat-go/jwx/v4` v4.4.0 on, jwx registers ML-DSA natively

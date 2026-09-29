@@ -12,11 +12,10 @@
 //
 // Until that migration happens, keeping the import costs nothing. init detects
 // jwx's registration and switches to interop mode, where this package
-// implements no ML-DSA of its own and instead converts [filippo.io/mldsa] keys
-// to crypto/mldsa so that jwx handles them. Both key libraries work through
-// jwk, jws, and jwt in that mode, and signatures made under one verify under
-// the other. See [InteropMode] for the details and for the one limit:
-// jwsbb and dsig accept crypto/mldsa keys only.
+// implements no ML-DSA of its own and registers nothing. On Go 1.27,
+// [filippo.io/mldsa] declares its key types as aliases of the crypto/mldsa
+// types, so jwx accepts a filippo key directly at every layer, jwsbb and dsig
+// included. See [InteropMode] for the details.
 //
 // Both versions matter. jwx v4.3.0 and earlier register no ML-DSA on any
 // toolchain, and jwx v4.4.0 built with Go 1.26 does the same, because its
@@ -82,10 +81,10 @@ func MLDSA87() jwa.SignatureAlgorithm {
 
 // requireParamsMatch verifies that a caller-supplied key's parameter set
 // matches the algorithm's registered parameter set. filippo.io/mldsa
-// returns package-level singletons from MLDSA44/65/87, so pointer
-// equality is sufficient. Mismatch indicates an alg/key confusion
+// returns comparable values from MLDSA44/65/87 that are equal for the
+// same parameter set, so == is sufficient. Mismatch indicates an alg/key confusion
 // attempt (EXT-010).
-func requireParamsMatch(got, want *mldsa.Parameters) error {
+func requireParamsMatch(got, want mldsa.Parameters) error {
 	if got != want {
 		return fmt.Errorf(`ML-DSA parameter set mismatch: key is %s, algorithm is %s`, got, want)
 	}
@@ -93,7 +92,7 @@ func requireParamsMatch(got, want *mldsa.Parameters) error {
 }
 
 // paramsForAlg returns the mldsa.Parameters for the given algorithm string.
-func paramsForAlg(alg string) (*mldsa.Parameters, error) {
+func paramsForAlg(alg string) (mldsa.Parameters, error) {
 	switch alg {
 	case algMLDSA44:
 		return mldsa.MLDSA44(), nil
@@ -102,7 +101,7 @@ func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 	case algMLDSA87:
 		return mldsa.MLDSA87(), nil
 	default:
-		return nil, fmt.Errorf(`unknown ML-DSA algorithm %q`, alg)
+		return mldsa.Parameters{}, fmt.Errorf(`unknown ML-DSA algorithm %q`, alg)
 	}
 }
 
@@ -111,15 +110,18 @@ func paramsForAlg(alg string) (*mldsa.Parameters, error) {
 // apart.
 var interop bool
 
-// InteropMode reports whether this package is bridging filippo.io/mldsa key
-// types onto an ML-DSA implementation that jwx already provides, instead of
-// implementing ML-DSA itself.
+// InteropMode reports whether this package defers to an ML-DSA
+// implementation that jwx already provides, instead of implementing ML-DSA
+// itself.
 //
 // It is true when jwx registered ML-DSA before this package's init() ran,
 // which happens from jwx v4.4.0 on when built with Go 1.27 or later. In that
-// mode this package performs no ML-DSA operations of its own: it converts
-// filippo.io/mldsa keys to crypto/mldsa and hands them to jwx. The
-// conversion is confined to the jwk and jws layers, so jwsbb and dsig accept
+// mode this package performs no ML-DSA operations of its own. On Go 1.27,
+// filippo.io/mldsa key types are aliases of the crypto/mldsa types, so jwx
+// handles filippo keys directly at every layer and this package registers
+// nothing. The one exception is a build with the fips140v1.0 tag, where
+// filippo.io/mldsa keeps its own types: there this package converts filippo
+// keys to crypto/mldsa in the jwk and jws layers, and jwsbb and dsig accept
 // crypto/mldsa keys only.
 //
 // It is false in the ordinary case where this package owns the algorithms
@@ -140,9 +142,10 @@ func init() {
 	// the algorithm name, so whoever registered first owns the behavior, and
 	// jwx's own implementation is the one its key types are built for.
 	//
-	// Yielding the algorithms does not mean yielding the key types. filippo
-	// keys are still accepted through jwk and jws, by converting them to
-	// crypto/mldsa; registerInterop installs that bridge.
+	// Yielding the algorithms does not mean yielding the key types. On Go
+	// 1.27 filippo keys are crypto/mldsa keys, so jwx already accepts them.
+	// Under the fips140v1.0 tag they are distinct types, and registerInterop
+	// installs a bridge that converts them.
 	//
 	// The probe is on dsig rather than on the Go version so that this works
 	// against any jwx release: an older jwx on Go 1.27 registers nothing, and
@@ -175,7 +178,7 @@ func init() {
 	for _, entry := range []struct {
 		name   string
 		alg    jwa.SignatureAlgorithm
-		params *mldsa.Parameters
+		params mldsa.Parameters
 	}{
 		{algMLDSA44, MLDSA44(), mldsa.MLDSA44()},
 		{algMLDSA65, MLDSA65(), mldsa.MLDSA65()},
@@ -247,7 +250,7 @@ func importMLDSAPublicKey(raw *mldsa.PublicKey) (jwk.Key, error) {
 // It handles raw *mldsa.PrivateKey / *mldsa.PublicKey only — JWK key
 // unwrapping is done by the jws.Signer/Verifier layer above.
 type mldsaDsigAlgorithm struct {
-	params *mldsa.Parameters
+	params mldsa.Parameters
 }
 
 func (a *mldsaDsigAlgorithm) Sign(key any, payload []byte, _ io.Reader) ([]byte, error) {

@@ -26,7 +26,7 @@ func requireInterop(t *testing.T) {
 	}
 }
 
-func stdParamsFor(t *testing.T, params *mldsa.Parameters) stdmldsa.Parameters {
+func stdParamsFor(t *testing.T, params mldsa.Parameters) stdmldsa.Parameters {
 	t.Helper()
 	switch params.String() {
 	case algMLDSA44:
@@ -46,7 +46,7 @@ func TestInteropFilippoKeyThroughJWS(t *testing.T) {
 	requireInterop(t)
 	t.Parallel()
 
-	for _, params := range []*mldsa.Parameters{mldsa.MLDSA44(), mldsa.MLDSA65(), mldsa.MLDSA87()} {
+	for _, params := range []mldsa.Parameters{mldsa.MLDSA44(), mldsa.MLDSA65(), mldsa.MLDSA87()} {
 		t.Run(params.String(), func(t *testing.T) {
 			t.Parallel()
 			alg := jwa.NewSignatureAlgorithm(params.String())
@@ -209,7 +209,7 @@ func TestInteropRejectsParamSetConfusion(t *testing.T) {
 	cases := []struct {
 		name     string
 		routeAlg jwa.SignatureAlgorithm
-		keyGen   *mldsa.Parameters
+		keyGen   mldsa.Parameters
 	}{
 		{"ML-DSA-65-as-ML-DSA-44", jwxmldsa.MLDSA44(), mldsa.MLDSA65()},
 		{"ML-DSA-44-as-ML-DSA-87", jwxmldsa.MLDSA87(), mldsa.MLDSA44()},
@@ -239,7 +239,7 @@ func TestInteropKeyConversionIsLossless(t *testing.T) {
 	requireInterop(t)
 	t.Parallel()
 
-	for _, params := range []*mldsa.Parameters{mldsa.MLDSA44(), mldsa.MLDSA65(), mldsa.MLDSA87()} {
+	for _, params := range []mldsa.Parameters{mldsa.MLDSA44(), mldsa.MLDSA65(), mldsa.MLDSA87()} {
 		t.Run(params.String(), func(t *testing.T) {
 			t.Parallel()
 			stdParams := stdParamsFor(t, params)

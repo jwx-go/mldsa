@@ -11,7 +11,7 @@ import (
 
 type mldsaVerifier struct {
 	algName string
-	params  *mldsa.Parameters
+	params  mldsa.Parameters
 }
 
 func (v *mldsaVerifier) Verify(key any, payload, signature []byte) error {
@@ -22,7 +22,7 @@ func (v *mldsaVerifier) Verify(key any, payload, signature []byte) error {
 	return jwsbb.Verify(pk, v.algName, payload, signature)
 }
 
-func extractPublicKey(key any, params *mldsa.Parameters) (*mldsa.PublicKey, error) {
+func extractPublicKey(key any, params mldsa.Parameters) (*mldsa.PublicKey, error) {
 	switch k := key.(type) {
 	case *mldsa.PublicKey:
 		if err := requireParamsMatch(k.Parameters(), params); err != nil {

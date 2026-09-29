@@ -1,4 +1,4 @@
-//go:build go1.27
+//go:build go1.27 && fips140v1.0
 
 package mldsa
 
@@ -15,6 +15,11 @@ import (
 // registerInterop installs the filippo.io/mldsa bridge on top of an ML-DSA
 // implementation jwx already registered, and reports that interop mode is
 // active.
+//
+// The bridge is only needed under the fips140v1.0 tag. That is the one
+// Go 1.27 build where filippo.io/mldsa ships its own key types. Everywhere
+// else on Go 1.27 they are aliases of the crypto/mldsa types; see
+// interop_alias.go.
 //
 // Nothing here touches dsig. dsig rejects a duplicate algorithm name and it
 // already owns ML-DSA-44/65/87 in this configuration, so the jwsbb and dsig

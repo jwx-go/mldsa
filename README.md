@@ -16,9 +16,9 @@ To migrate when both do hold:
 - Replace `filippo.io/mldsa` with `crypto/mldsa`.
 - Use `jwa.MLDSA44()`, `jwa.MLDSA65()`, `jwa.MLDSA87()` in place of this package's accessors.
 
-Until you migrate, keeping the import costs nothing. `init()` detects jwx's registration and switches to **interop mode**, where this module implements no ML-DSA of its own and instead converts `filippo.io/mldsa` keys to `crypto/mldsa` so jwx handles them. Both key libraries then work through `jwk`, `jws`, and `jwt`, and a signature made under one verifies under the other. `InteropMode()` reports whether that path was taken.
+Until you migrate, keeping the import costs nothing. `init()` detects jwx's registration and switches to **interop mode**, where this module implements no ML-DSA of its own and registers nothing. On Go 1.27, `filippo.io/mldsa` v1 declares its key types as aliases of the `crypto/mldsa` types, so jwx accepts a `filippo.io/mldsa` key at every layer, `jwsbb` and `dsig` included. `InteropMode()` reports whether that path was taken.
 
-Two things change in interop mode. `jwsbb` and `dsig` accept `crypto/mldsa` keys only, because they dispatch on the algorithm name and jwx owns those names there. `jwk.Export[any]` returns a `crypto/mldsa` key, so ask for `jwk.Export[*mldsa.PrivateKey]` when you specifically want a `filippo.io/mldsa` one.
+A build with the `fips140v1.0` tag is the one exception. There `filippo.io/mldsa` keeps its own key types, so this module converts them to `crypto/mldsa` in `jwk` and `jws`, and `jwsbb` and `dsig` accept `crypto/mldsa` keys only.
 
 Keys held as JWKs need no change either way. This module stays supported for as long as jwx supports Go 1.26.
 
